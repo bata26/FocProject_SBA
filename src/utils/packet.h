@@ -714,13 +714,11 @@ struct client_info{
             return false;
         }
 
-        pos += delimiterPos;
-        content = content.substr(pos);
+        content = content.substr(delimiterPos + 1);
         delimiterPos = content.find(delimiter, pos);
         timestamp = stoull(content.substr(pos, delimiterPos - pos));
 
-        pos += delimiterPos;
-        content = content.substr(pos);
+        content = content.substr(delimiterPos + 1);
         delimiterPos = content.find(delimiter, pos);
         destAndAmount = content.substr(pos);
 
