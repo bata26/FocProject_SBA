@@ -1,0 +1,1 @@
+openssl rsautl -encrypt -in src/server/users.txt -inkey src/server/keys/server_privK.pem -out src/server/users.txt.enc
