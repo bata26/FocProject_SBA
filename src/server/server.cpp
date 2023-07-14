@@ -15,6 +15,11 @@
 #include <stdlib.h>
 #include "./../utils/env.h"
 #include "./../utils/packet.h"
+#include <iostream>
+#include <iomanip>
+#include <openssl/rand.h>
+#include <sstream>
+#include <string>
 
 using namespace std;
 
@@ -76,38 +81,91 @@ bool check_username(string username)
     return false;
 }
 
+string generateID(){
+    int idSize = 8;
+    unsigned char * id = (unsigned char *)malloc(idSize);
+    string stringID;
+
+    if (RAND_bytes((unsigned char*)id, idSize) != 1) {
+        cerr << "ERR: Impossible generate ID" << endl;
+        return "";
+    }
+
+    std::ostringstream oss;
+    oss << std::hex << std::setfill('0');
+    for (int i = 0; i < idSize; ++i) {
+        oss << std::setw(2) << static_cast<unsigned int>(id[i]);
+    }
+    string salt_hex = oss.str();
+    cout << salt_hex << endl;
+    free(id);
+    return salt_hex;
+}
+
+string getBalanceFromFileRow(unsigned char* fileRow){
+    string s = (char * )fileRow;
+    string delimiter = " ";
+    int pos = 0;
+    int delimiterPos = 0;
+
+    delimiterPos = s.find(delimiter , pos);
+    cout << "delimiterPOS : " << delimiterPos << endl;
+    s = s.substr(delimiterPos + 1);
+    return s;
+}
+
+string getUserIDFromFileRow(unsigned char* fileRow){
+    string s = (char * )fileRow;
+    string delimiter = " ";
+    int pos = 0;
+    int delimiterPos = 0;
+
+    delimiterPos = s.find(delimiter , pos);
+    s = s.substr(pos , delimiterPos);
+    return s;
+}
+
+void updateUserBalance(string user, int amount){
+    unsigned char *idAndBalance = decrypt_file("./src/server/" + user + "Balance.txt.enc");
+    string userID = getUserIDFromFileRow(idAndBalance);
+    int userBalance = stoi(getBalanceFromFileRow(idAndBalance));
+
+    string newRow = userID + " " + to_string(userBalance + amount);
+    cout<< "new ROW : " << newRow << endl;
+    encrypt_file("./src/server/" + user + "Balance.txt.enc" , "OVERWRITE" , newRow);
+}
+
+bool fileExists(const string filename) {
+    ifstream file(filename);
+    return file.good();
+}
+
+void addTransaction(string transactionID, string user, string userToWrite, int amount, uint64_t timestamp){
+    string filename = "./src/server/" + user + "History.txt.enc";
+    string fileAccessMode = "APPEND";
+    string fileRow;
+    
+    if(!fileExists(filename)){
+        cout << "creo il file "<< filename << endl;
+        // create the file
+        ofstream file(filename);
+        file.close();
+        fileAccessMode = "OVERWRITE";
+        fileRow = "";
+    }
+
+    fileRow += transactionID + " " + userToWrite + " " + to_string(amount) + " " + to_string(timestamp) + "\n";
+    encrypt_file(filename , fileAccessMode , fileRow);
+
+}
+
 // Returns balance
 string return_balance(string currentUser)
 {
     if (!check_username(currentUser))
         return "";
     unsigned char *idAndBalance = decrypt_file("./src/server/" + currentUser + "Balance.txt.enc");
-    string delimiter = " ";
-    int pos = 0;
-    int delimiterPos = 0;
-    string fileRow = (char*)idAndBalance;
-    free(idAndBalance);
-
-    delimiterPos = fileRow.find(delimiter , pos);
-    fileRow = fileRow.substr(delimiterPos + 1);
-    return fileRow;
-}
-
-// Extracts the id and balance of the specified user
-struct IdAndBalance extract_id_and_balance(unsigned char *idAndBalance)
-{
-    struct IdAndBalance user;
-    int internal_counter = 0;
-    char *pch = strtok((char *)idAndBalance, " ");
-    while (pch != NULL)
-    {
-        // Last number is the balance
-        user.values[internal_counter] = atoi(pch);
-        pch = strtok(NULL, " ");
-        internal_counter++;
-    }
-    // cout << "DEBUG: id is: " << user.values[0] << ", balance is: " << user.values[1] << endl;
-    return user;
+    return getBalanceFromFileRow(idAndBalance);
 }
 
 // Returns the balance to the user
@@ -118,125 +176,104 @@ string balance(client_info rcv_pkt)
     cout << "balance ottenuto  : " << balance << endl;
     if (balance == ""){
         response_pkt.responseCode = 500;
+        response_pkt.responseContent = "Balance Error.";
     }else{
         response_pkt.responseCode = 200;
+        response_pkt.responseContent = balance;
     }
     response_pkt.timestamp = rcv_pkt.timestamp;
-    response_pkt.responseContent = balance;
-
+    
     // Serialize packet
     return response_pkt.serializePacket();
 }
 
-/*
-// Transfer an amount of money to another user
-string transfer_validation(client_info rcv_pkt)
-{
-    return "";
-    counter = counter + 1;
+string getUserHistory(){
+    string fileName = "./src/server/" + logged_user + "History.txt.enc";
+    unsigned char * historyContent = decrypt_file(fileName);
+    string content = (char *)historyContent;
+    string historyResult;
+    istringstream iss(content);
+    string line;
+    int lineCount = 0;
 
+    while (std::getline(iss, line) && lineCount < 5) {
+        std::cout << line << std::endl;
+        if(lineCount != 0) historyResult +="\n";
+        historyResult += line;
+        lineCount++;
+    }
+    return historyResult;
+}
+
+// Transfer an amount of money to another user
+string transfer(client_info rcv_pkt)
+{
     // Build response pkt
     server_info response_pkt;
-    string receiver;
+    string dest;
     int amount;
     string s = rcv_pkt.destAndAmount;
-    string delimiter = "|";
+    string delimiter = "-";
     unsigned int pos;
 
-    // Packet to return
-    //response_pkt.code = rcv_pkt.operationCode;
-    //response_pkt.response = 1;
-    //response_pkt.response_output = "";
-    //response_pkt.counter = counter;
+    pos = s.find(delimiter, 0);
+    dest = s.substr(0 , pos);
+    amount = stoi(s.substr(pos + 1));
 
-    // Extract the receiver
-    pos = s.find(delimiter);
-    string i = s.substr(0, pos);
-    receiver = i;
-    s.erase(0, pos + delimiter.length());
+    try{
+        // check if the username is valid
+        if(!check_username(dest)){
+            cerr << "ERR: Receiver doesn't exist." << endl;
+            response_pkt.responseCode = 500;
+            response_pkt.responseContent = "Invalid dest";
+            throw exception();
+        }
 
-    // Extract the amount
-    pos = s.find(delimiter);
-    if (pos != string::npos)
-    {
-        string i = s.substr(0, pos);
-        amount = stoi(i);
-        s.erase(0, pos + delimiter.length());
+        int senderBalance = stoi(return_balance(logged_user));
+        if(senderBalance < amount) {
+            cerr << "ERR: Amount not available." << endl;
+            response_pkt.responseCode = 500;
+            response_pkt.responseContent = "Invalid amount";
+            throw exception();
+        }
+
+        uint64_t currentTimestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        string transactionID = generateID();
+
+        if(transactionID == ""){
+            cerr << "ERR: Impossible to generate ID" << endl;
+            response_pkt.responseCode = 500;
+            response_pkt.responseContent = "Generic error";
+            throw exception();
+        }
+
+        updateUserBalance(logged_user, -amount);
+        updateUserBalance(dest, amount);
+        
+        addTransaction(transactionID, logged_user, dest, -amount ,currentTimestamp);
+        addTransaction(transactionID, dest, logged_user, amount ,currentTimestamp);
+
+        response_pkt.responseCode = 200;
+        response_pkt.timestamp = rcv_pkt.timestamp;   
+        response_pkt.responseContent = "OK";   
+
+        return response_pkt.serializePacket();
+
+    }catch(...){
+        return response_pkt.serializePacket();
     }
 
-    // Perform the checks and the update of the files
-    try
-    {
-        if (logged_user.compare(receiver) == 0)
-        {
-            //response_pkt.response = 0;
-            throw -1;
-        }
-        string senderIdAndBalance = return_balance(logged_user);
-        string receiverIdAndBalance = return_balance(receiver);
-        if (receiverIdAndBalance == NULL) // Receiver doesn't exist!
-        {
-            //response_pkt.response = 0;
-            throw 0;
-        }
-        struct IdAndBalance parsedSender = extract_id_and_balance(senderIdAndBalance);
-        free(senderIdAndBalance);
-        struct IdAndBalance parsedReceiver = extract_id_and_balance(receiverIdAndBalance);
-        free(receiverIdAndBalance);
-        if (parsedSender.values[1] < amount) // Not Enough money
-        {
-            //response_pkt.response = 0;
-            throw 1;
-        }
-        // Update the balances
-        parsedSender.values[1] = parsedSender.values[1] - amount;
-        parsedReceiver.values[1] = parsedReceiver.values[1] + amount;
-        // Perform all operations!
-        string senderRecord = to_string(parsedSender.values[0]) + " " + to_string(parsedSender.values[1]);
-        encrypt_file(logged_user + "Balance.txt.enc", "OVERWRITE", senderRecord);
-        string receiverRecord = to_string(parsedReceiver.values[0]) + " " + to_string(parsedReceiver.values[1]);
-        encrypt_file(receiver + "Balance.txt.enc", "OVERWRITE", receiverRecord);
-        string sendOperation = "\nYou have sent " + to_string(amount) + " euros to " + receiver;
-        encrypt_file(logged_user + "Operations.txt.enc", "APPEND", sendOperation);
-        string receiveOperation = "\nYou have received " + to_string(amount) + " euros from " + logged_user;
-        encrypt_file(receiver + "Operations.txt.enc", "APPEND", receiveOperation);
-    }
-    catch (int error_code)
-    {
-        if (error_code == -1)
-            cerr << "ERR: " << logged_user << " tried to send money to himself!" << endl;
-        if (error_code == 0)
-            cerr << "ERR: " << logged_user << " tried to send money to " << receiver << " but this user doesn't exist!" << endl;
-        if (error_code == 1)
-            cerr << "ERR: " << logged_user << " has not enough money to do the transfer!" << endl;
-    }
-
-    // Serialize packet
-    return response_pkt.serializePacket();
 }
 
-*/
 
 // Send to requesting user the History of the transactions performed
 string history(client_info rcv_pkt)
 {
-    string userFile = logged_user + "Operations.txt.enc";
-    counter = counter + 1;
-
-    // Build response packet
     server_info response_pkt;
-    unsigned char *pointer = nullptr;
-    //response_pkt.code = rcv_pkt.operationCode;
-    pointer = decrypt_file(userFile);
-    if (pointer == nullptr)
-        throw 5;
-    //response_pkt.response = 1;
-    string history((char *)pointer);
-    free(pointer);
-    //response_pkt.response_output = history;
-    //response_pkt.counter = counter;
-
-    // Serialize packet
+    string userHistory = getUserHistory();
+    response_pkt.responseContent = userHistory;
+    response_pkt.responseCode = 200;
+    response_pkt.timestamp = rcv_pkt.timestamp;
     return response_pkt.serializePacket();
 }
 
@@ -247,10 +284,9 @@ string logout(client_info rcv_pkt)
 
     // Build response packet
     server_info response_pkt;
-    //response_pkt.code = rcv_pkt.operationCode;
-    //response_pkt.response = 1;
-    //response_pkt.response_output = "";
-    //response_pkt.counter = counter;
+    response_pkt.timestamp = rcv_pkt.timestamp;
+    response_pkt.responseCode = 200;
+    response_pkt.responseContent = "OK";
     // Serialize packet
     return response_pkt.serializePacket();
 }
@@ -1044,12 +1080,12 @@ int handle_command()
             buffer = balance(pkt_simple);
             break;
         }
-        //case TRANSFER:
-        //{
-        //    cout << "Received Transfer command from " << logged_user << endl;
-        //    buffer = transfer_validation(pkt_simple);
-        //    break;
-        //}
+        case TRANSFER:
+        {
+            cout << "Received Transfer command from " << logged_user << endl;
+            buffer = transfer(pkt_simple);
+            break;
+        }
         case HISTORY:
         {
             cout << "Received History command from " << logged_user << endl;
@@ -1176,10 +1212,12 @@ int main(int argc, char **argv)
         return -1;
     }
     //cout << "cifratura iniziale del file utenti" << endl;
-    encrypt_file("./src/server/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
-    encrypt_file("./src/server/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
-    encrypt_file("./src/server/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
-    encrypt_file("./src/server/bobBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 200");
+    //encrypt_file("./src/server/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
+    //encrypt_file("./src/server/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
+    //encrypt_file("./src/server/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
+    //encrypt_file("./src/server/bobBalance.txt.enc" , "OVERWRITE" , "6ed3509863adfbe4 200");
+    //encrypt_file("./src/server/aliceHistory.txt.enc" , "APPEND" , "\n");
+    //encrypt_file("./src/server/bobHistory.txt.enc" , "APPEND" , "\n");
     //------ Setting up the server ------//
 
     // Assign the port

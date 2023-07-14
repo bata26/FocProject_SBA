@@ -779,6 +779,7 @@ string send_operation_packet(int operation)
     }
 
     buffer = pkt.serializePacket();
+    cout << "sto per inviare : " << buffer << endl;
 
     iv = generate_iv(); // THROWS 0
 
