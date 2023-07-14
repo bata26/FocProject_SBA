@@ -15,7 +15,6 @@ using namespace std;
 
 unsigned char *decrypt_file(string fileName)
 {
-    cout << "fileName : " <<fileName << endl;
     int ret; // Used to return values
     string password = "server";
     string prvkey_file_name = "./src/server/keys/server_privK.pem";
@@ -24,14 +23,14 @@ unsigned char *decrypt_file(string fileName)
     FILE *prvkey_file = fopen(prvkey_file_name.c_str(), "r");
     if (!prvkey_file)
     {
-        cerr << "ERR: cannot open file '" << prvkey_file_name << "' (missing?)\n";
+        cerr << "[ERROR] cannot open file '" << prvkey_file_name << "' (missing?)\n";
         exit(1);
     }
     EVP_PKEY *prvkey = PEM_read_PrivateKey(prvkey_file, NULL, NULL, (void *)password.c_str());
     fclose(prvkey_file);
     if (!prvkey)
     {
-        cerr << "ERR: PEM_read_PrivateKey returned NULL\n";
+        cerr << "[ERROR] PEM_read_PrivateKey returned NULL\n";
         exit(1);
     }
 
@@ -39,7 +38,7 @@ unsigned char *decrypt_file(string fileName)
     FILE *cphr_file_to_decrypt = fopen(fileName.c_str(), "rb");
     if (!cphr_file_to_decrypt)
     {
-        cerr << "ERR: cannot open file '" << fileName << "' (file does not exist?)\n";
+        cerr << "[ERROR] cannot open file '" << fileName << "' (file does not exist?)\n";
         exit(1);
     }
 
@@ -47,17 +46,16 @@ unsigned char *decrypt_file(string fileName)
     ret = fseek(cphr_file_to_decrypt, 0, SEEK_END);
     if (ret != 0)
     {
-        cerr << "ERR: cannot seek_end in  '" << fileName << "' (file corrupted?)\n";
+        cerr << "[ERROR] cannot seek_end in  '" << fileName << "' (file corrupted?)\n";
         exit(1);
     }
     long int cphr_file_size = ftell(cphr_file_to_decrypt);
     ret = fseek(cphr_file_to_decrypt, 0, SEEK_SET);
     if (ret != 0)
     {
-        cerr << "ERR: cannot seek_set in  '" << fileName << "' (file corrupted?)\n";
+        cerr << "[ERROR] cannot seek_set in  '" << fileName << "' (file corrupted?)\n";
         exit(1);
     }
-    cout << "pre variabili" << endl;
     // Vars
     const EVP_CIPHER *cipher_to_decrypt = EVP_aes_128_cbc();
     int encrypted_key_len_to_decrypt = EVP_PKEY_size(prvkey);
@@ -66,17 +64,15 @@ unsigned char *decrypt_file(string fileName)
     // Check for possible integer overflow in (encrypted_key_len + iv_len)
     if (encrypted_key_len_to_decrypt > INT_MAX - iv_len_to_decrypt)
     {
-        cerr << "ERR: integer overflow (encrypted key too big?)\n";
+        cerr << "[ERROR] integer overflow (encrypted key too big?)\n";
         exit(1);
     }
     // Check for correct format of the encrypted file
     if (cphr_file_size < encrypted_key_len_to_decrypt + iv_len_to_decrypt)
     {
-        cerr << "ERR: encrypted file with wrong format\n";
+        cerr << "[ERROR] encrypted file with wrong format\n";
         exit(1);
     }
-
-    cout << "pre allocate " << endl;
 
     // Allocate buffers for encrypted key, IV, ciphertext, and plaintext:
     unsigned char *encrypted_key_to_decrypt = (unsigned char *)malloc(encrypted_key_len_to_decrypt);
@@ -86,7 +82,7 @@ unsigned char *decrypt_file(string fileName)
     unsigned char *clear_buf = (unsigned char *)malloc(cphr_size_to_decrypt);
     if (!encrypted_key_to_decrypt || !iv_to_decrypt || !cphr_buf_to_decrypt || !clear_buf)
     {
-        cerr << "ERR: malloc returned NULL (file too big?)\n";
+        cerr << "[ERROR] malloc returned NULL (file too big?)\n";
         exit(1);
     }
 
@@ -94,21 +90,19 @@ unsigned char *decrypt_file(string fileName)
     ret = fread(encrypted_key_to_decrypt, 1, encrypted_key_len_to_decrypt, cphr_file_to_decrypt);
     if (ret < encrypted_key_len_to_decrypt)
     {
-        cerr << "ERR: while reading file '" << fileName << "'\n";
+        cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
     ret = fread(iv_to_decrypt, 1, iv_len_to_decrypt, cphr_file_to_decrypt);
-    cout<< "post read" << endl;
     if (ret < iv_len_to_decrypt)
     {
-        cerr << "ERR: while reading file '" << fileName << "'\n";
+        cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
     ret = fread(cphr_buf_to_decrypt, 1, cphr_size_to_decrypt, cphr_file_to_decrypt);
-    cout<< "post read" << endl;
     if (ret < cphr_size_to_decrypt)
     {
-        cerr << "ERR: while reading file '" << fileName << "'\n";
+        cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
     fclose(cphr_file_to_decrypt);
@@ -117,7 +111,7 @@ unsigned char *decrypt_file(string fileName)
     EVP_CIPHER_CTX *ctx_to_decrypt = EVP_CIPHER_CTX_new();
     if (!ctx_to_decrypt)
     {
-        cerr << "ERR: EVP_CIPHER_CTX_new returned NULL\n";
+        cerr << "[ERROR] EVP_CIPHER_CTX_new returned NULL\n";
         exit(1);
     }
 
@@ -125,7 +119,7 @@ unsigned char *decrypt_file(string fileName)
     ret = EVP_OpenInit(ctx_to_decrypt, cipher_to_decrypt, encrypted_key_to_decrypt, encrypted_key_len_to_decrypt, iv_to_decrypt, prvkey);
     if (ret == 0)
     {
-        cerr << "ERR: EVP_OpenInit returned " << ret << "\n";
+        cerr << "[ERROR] EVP_OpenInit returned " << ret << "\n";
         exit(1);
     }
     int nd = 0;    // bytes decrypted at each chunk
@@ -133,27 +127,24 @@ unsigned char *decrypt_file(string fileName)
     ret = EVP_OpenUpdate(ctx_to_decrypt, clear_buf, &nd, cphr_buf_to_decrypt, cphr_size_to_decrypt);
     if (ret == 0)
     {
-        cerr << "ERR: EVP_OpenUpdate returned " << ret << "\n";
+        cerr << "[ERROR] EVP_OpenUpdate returned " << ret << "\n";
         exit(1);
     }
     ndtot += nd;
     ret = EVP_OpenFinal(ctx_to_decrypt, clear_buf + ndtot, &nd);
     if (ret == 0)
     {
-        cout << "ERR: EVP_OpenFinal returned " << ret << " (corrupted file?)\n";
+        cerr << "[ERROR] EVP_OpenFinal returned " << ret << " (corrupted file?)\n";
         exit(1);
     }
     ndtot += nd;
     int clear_size = ndtot;
-    cout << "terminata " << endl;
     string terminator = "";
     unsigned char *result = (unsigned char *)malloc(clear_size + 1);
     memcpy(result, clear_buf, clear_size);
     memcpy(result + clear_size, (unsigned char *)terminator.c_str(), 1);
-    cout << "pre free" << endl;
     // Frees
     EVP_CIPHER_CTX_free(ctx_to_decrypt);
-    cout << result << endl;
     EVP_PKEY_free(prvkey);
     free(encrypted_key_to_decrypt);
     free(iv_to_decrypt);
@@ -189,14 +180,14 @@ void encrypt_file(string fileName, string mode, string text)
     FILE *pubkey_file = fopen(pubkey_file_name.c_str(), "r");
     if (!pubkey_file)
     {
-        cerr << "ERR: cannot open file '" << pubkey_file_name << "' (missing?)\n";
+        cerr << "[ERROR] cannot open file '" << pubkey_file_name << "' (missing?)\n";
         exit(1);
     }
     EVP_PKEY *pubkey = PEM_read_PUBKEY(pubkey_file, NULL, NULL, NULL);
     fclose(pubkey_file);
     if (!pubkey)
     {
-        cerr << "ERR: PEM_read_PUBKEY returned NULL\n";
+        cerr << "[ERROR] PEM_read_PUBKEY returned NULL\n";
         exit(1);
     }
 
@@ -210,7 +201,7 @@ void encrypt_file(string fileName, string mode, string text)
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
     {
-        cerr << "ERR: EVP_CIPHER_CTX_new returned NULL\n";
+        cerr << "[ERROR] EVP_CIPHER_CTX_new returned NULL\n";
         exit(1);
     }
 
@@ -219,14 +210,14 @@ void encrypt_file(string fileName, string mode, string text)
     unsigned char *iv = (unsigned char *)malloc(iv_len);
     if (!encrypted_key || !iv)
     {
-        cerr << "ERR: malloc returned NULL (encrypted key too big?)\n";
+        cerr << "[ERROR] malloc returned NULL (encrypted key too big?)\n";
         exit(1);
     }
 
     // Check for possible integer overflow in (clear_size + block_size)
     if (text_to_encrypt_length > INT_MAX - block_size)
     {
-        cerr << "ERR: integer overflow (file too big?)\n";
+        cerr << "[ERROR] integer overflow (file too big?)\n";
         exit(1);
     }
 
@@ -235,7 +226,7 @@ void encrypt_file(string fileName, string mode, string text)
     unsigned char *cphr_buf = (unsigned char *)malloc(enc_buffer_size);
     if (!cphr_buf)
     {
-        cerr << "ERR: malloc returned NULL (file too big?)\n";
+        cerr << "[ERROR] malloc returned NULL (file too big?)\n";
         exit(1);
     }
 
@@ -243,7 +234,7 @@ void encrypt_file(string fileName, string mode, string text)
     ret = EVP_SealInit(ctx, cipher, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1);
     if (ret <= 0)
     {
-        cerr << "ERR: EVP_SealInit returned " << ret << "\n";
+        cerr << "[ERROR] EVP_SealInit returned " << ret << "\n";
         exit(1);
     }
     int nc = 0;    // Bytes encrypted at each chunk
@@ -251,14 +242,14 @@ void encrypt_file(string fileName, string mode, string text)
     ret = EVP_SealUpdate(ctx, cphr_buf, &nc, text_to_encrypt, text_to_encrypt_length);
     if (ret == 0)
     {
-        cerr << "ERR: EVP_SealUpdate returned " << ret << "\n";
+        cerr << "[ERROR] EVP_SealUpdate returned " << ret << "\n";
         exit(1);
     }
     nctot += nc;
     ret = EVP_SealFinal(ctx, cphr_buf + nctot, &nc);
     if (ret == 0)
     {
-        cerr << "ERR: EVP_SealFinal returned " << ret << "\n";
+        cerr << "[ERROR] EVP_SealFinal returned " << ret << "\n";
         exit(1);
     }
     nctot += nc;
@@ -268,25 +259,25 @@ void encrypt_file(string fileName, string mode, string text)
     FILE *cphr_file = fopen(fileName.c_str(), "wb");
     if (!cphr_file)
     {
-        cerr << "ERR: cannot open file '" << fileName << "' (no permissions?)\n";
+        cerr << "[ERROR] cannot open file '" << fileName << "' (no permissions?)\n";
         exit(1);
     }
     ret = fwrite(encrypted_key, 1, encrypted_key_len, cphr_file);
     if (ret < encrypted_key_len)
     {
-        cerr << "ERR: Couldn't write on file '" << fileName << "'\n";
+        cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
     ret = fwrite(iv, 1, EVP_CIPHER_iv_length(cipher), cphr_file);
     if (ret < EVP_CIPHER_iv_length(cipher))
     {
-        cerr << "ERR: Couldn't write on file '" << fileName << "'\n";
+        cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
     ret = fwrite(cphr_buf, 1, cphr_size, cphr_file);
     if (ret < cphr_size)
     {
-        cerr << "ERR: Couldn't write on file '" << fileName << "'\n";
+        cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
     fclose(cphr_file);
@@ -364,27 +355,27 @@ EVP_PKEY *generate_dh_key()
         {
         case 0:
         {
-            cerr << "ERR: Couldn't generate new dh params!" << endl;
+            cerr << "[ERROR] Couldn't generate new dh params!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't load default params!" << endl;
+            cerr << "[ERROR] Couldn't load default params!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't load define dh context!" << endl;
+            cerr << "[ERROR] Couldn't load define dh context!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't dh keygen init!" << endl;
+            cerr << "[ERROR] Couldn't dh keygen init!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't dh keygen!" << endl;
+            cerr << "[ERROR] Couldn't dh keygen!" << endl;
             break;
         }
         }
@@ -407,7 +398,7 @@ unsigned char *derive_shared_secret(EVP_PKEY *this_key, EVP_PKEY *other_key)
     EVP_PKEY_CTX *key_ctx = EVP_PKEY_CTX_new(this_key, nullptr);
     if (!key_ctx)
     {
-        cerr << "ERR: Couldn't load define dh context of the current host!" << endl;
+        cerr << "[ERROR] Couldn't load define dh context of the current host!" << endl;
         return nullptr;
     }
 
@@ -442,11 +433,11 @@ unsigned char *derive_shared_secret(EVP_PKEY *this_key, EVP_PKEY *other_key)
     {
         if (e == 1)
         {
-            cerr << "ERR: Couldn't allocate shared secret!" << endl;
+            cerr << "[ERROR] Couldn't allocate shared secret!" << endl;
         }
         else
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
         }
         EVP_PKEY_CTX_free(key_ctx);
         return nullptr;
@@ -520,27 +511,27 @@ void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
         {
         case 0:
         {
-            cerr << "ERR: Couldn't BIO_new!" << endl;
+            cerr << "[ERROR] Couldn't BIO_new!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't PEM_write_bio_PUBKEY with error: " << ret << endl;
+            cerr << "[ERROR] Couldn't PEM_write_bio_PUBKEY with error: " << ret << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't BIO_get_mem_data with error: " << ret_long << endl;
+            cerr << "[ERROR] Couldn't BIO_get_mem_data with error: " << ret_long << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't BIO_read with error: " << ret << endl;
+            cerr << "[ERROR] Couldn't BIO_read with error: " << ret << endl;
             break;
         }
         }
@@ -591,17 +582,17 @@ EVP_PKEY *deserialize_evp_pkey(const void *_key_buffer, const uint32_t _key_leng
         {
         case 0:
         {
-            cerr << "ERR: Couldn't BIO_new!" << endl;
+            cerr << "[ERROR] Couldn't BIO_new!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't BIO_write with error: " << ret << endl;
+            cerr << "[ERROR] Couldn't BIO_write with error: " << ret << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't PEM_read_bio_PUBKEY!" << endl;
+            cerr << "[ERROR] Couldn't PEM_read_bio_PUBKEY!" << endl;
             break;
         }
         }
@@ -670,27 +661,27 @@ unsigned char *sign_message(EVP_PKEY *prvkey, const unsigned char *msg, const si
         {
         case 1:
         {
-            cerr << "ERR: Couldn't create new context for signature!" << endl;
+            cerr << "[ERROR] Couldn't create new context for signature!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't sign init!" << endl;
+            cerr << "[ERROR] Couldn't sign init!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't sign update!" << endl;
+            cerr << "[ERROR] Couldn't sign update!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 5:
         {
-            cerr << "ERR: Couldn't sign final!" << endl;
+            cerr << "[ERROR] Couldn't sign final!" << endl;
             break;
         }
         }
@@ -753,22 +744,22 @@ int verify_signature(EVP_PKEY *pubkey, const unsigned char *signature, const siz
         {
         case 1:
         {
-            cerr << "ERR:  Couldn't create new context for signature!" << endl;
+            cerr << "[ERROR]  Couldn't create new context for signature!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't verify init for signature!" << endl;
+            cerr << "[ERROR] Couldn't verify init for signature!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't verify update for signature!" << endl;
+            cerr << "[ERROR] Couldn't verify update for signature!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't verify final for signature!" << endl;
+            cerr << "[ERROR] Couldn't verify final for signature!" << endl;
             break;
         }
         }
@@ -789,7 +780,7 @@ int generate_SHA256(unsigned char *msg, size_t msg_len, unsigned char *&digest, 
 
     if (msg_len == 0 || msg_len > max_msg_size)
     {
-        cerr << "ERR: Message length is not allowed!" << endl;
+        cerr << "[ERROR] Message length is not allowed!" << endl;
         return -1;
     }
 
@@ -838,27 +829,27 @@ int generate_SHA256(unsigned char *msg, size_t msg_len, unsigned char *&digest, 
         {
         case 1:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't create context definition!" << endl;
+            cerr << "[ERROR] Couldn't create context definition!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't initialize digest creation!" << endl;
+            cerr << "[ERROR] Couldn't initialize digest creation!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't update digest!" << endl;
+            cerr << "[ERROR] Couldn't update digest!" << endl;
             break;
         }
         case 5:
         {
-            cerr << "ERR: Couldn't finalize digest!" << endl;
+            cerr << "[ERROR] Couldn't finalize digest!" << endl;
             break;
         }
         }
@@ -894,7 +885,7 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         ctx = HMAC_CTX_new();
         if (!ctx)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             throw 1;
         }
 
@@ -902,7 +893,7 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         if (!digest)
         {
             free(digest);
-            cerr << "ERR: Couldn't create context definition!" << endl;
+            cerr << "[ERROR] Couldn't create context definition!" << endl;
             throw 2;
         }
 
@@ -913,7 +904,7 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         {
             free(digest);
             HMAC_CTX_free(ctx);
-            cerr << "ERR: Couldn't initialize digest creation!" << endl;
+            cerr << "[ERROR] Couldn't initialize digest creation!" << endl;
             throw 3;
         }
 
@@ -922,7 +913,7 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         {
             free(digest);
             HMAC_CTX_free(ctx);
-            cerr << "ERR: Couldn't update digest!" << endl;
+            cerr << "[ERROR] Couldn't update digest!" << endl;
             throw 1;
         }
 
@@ -931,7 +922,7 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         {
             free(digest);
             HMAC_CTX_free(ctx);
-            cerr << "ERR: Couldn't finalize digest!" << endl;
+            cerr << "[ERROR] Couldn't finalize digest!" << endl;
             throw 1;
         }
 
@@ -959,14 +950,14 @@ int hash_symmetric_key(unsigned char *&symm_key, unsigned char *symm_key_no_hash
     ret = generate_SHA256(symm_key_no_hashed, key_size_aes, hash, len, key_size_aes);
     if (ret != 0)
     {
-        cerr << "ERR: Couldn't hash symmetric key!" << endl;
+        cerr << "[ERROR] Couldn't hash symmetric key!" << endl;
         return ret;
     }
 
     symm_key = (unsigned char *)malloc(key_size_aes); // AES-128
     if (!symm_key)
     {
-        cerr << "ERR: Couldn't malloc!" << endl;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
         return -1;
     }
 
@@ -989,14 +980,14 @@ int hash_hmac_key(unsigned char *&hmac_key, unsigned char *hmac_key_no_hashed)
     ret = generate_SHA256(hmac_key_no_hashed, HMAC_KEY_SIZE, hash, len, HMAC_KEY_SIZE);
     if (ret != 0)
     {
-        cerr << "ERR: Couldn't hash symmetric key!" << endl;
+        cerr << "[ERROR] Couldn't hash symmetric key!" << endl;
         return ret;
     }
 
     hmac_key = (unsigned char *)malloc(HMAC_KEY_SIZE);
     if (!hmac_key)
     {
-        cerr << "ERR: Couldn't malloc!" << endl;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
         return -1;
     }
 

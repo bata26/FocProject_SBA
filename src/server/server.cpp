@@ -20,13 +20,10 @@
 #include <openssl/rand.h>
 #include <sstream>
 #include <string>
+#include <chrono>
+#include "./operations.cpp"
 
 using namespace std;
-
-struct IdAndBalance
-{
-    int values[2];
-};
 
 string logged_user;
 string server_privK_path = "./src/server/keys/server_privK.pem";
@@ -50,246 +47,6 @@ unsigned char *symmetric_key = nullptr;
 unsigned char *hmac_key = nullptr;
 int symmetric_key_length = EVP_CIPHER_key_length(EVP_aes_128_cbc());
 int hmac_key_length = HMAC_KEY_SIZE;
-
-uint64_t lastTimestampReceived;
-
-// Checks if the username is present into the DB
-bool check_username(string username)
-{
-    if (username.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
-        return false;
-    unsigned char *allUsers = decrypt_file("./src/server/users.txt.enc");
-    string userList((char *)allUsers);
-    free(allUsers);
-    string lineDelimiter = "\n";
-    string usernameLimiter = " ";
-    unsigned int delimiterPos = 0;
-    unsigned int pos = 0;
-    unsigned int endLinePos =  0;
-
-    while (pos <= userList.length())
-    {
-        delimiterPos = userList.find(usernameLimiter, pos);
-        string name = userList.substr(pos, delimiterPos - pos);
-        if (name.compare(username) == 0)
-        {
-            return true;
-        }
-        unsigned int endLinePos = userList.find(lineDelimiter, pos);
-        pos = pos + endLinePos + 1;
-    }
-    return false;
-}
-
-string generateID(){
-    int idSize = 8;
-    unsigned char * id = (unsigned char *)malloc(idSize);
-    string stringID;
-
-    if (RAND_bytes((unsigned char*)id, idSize) != 1) {
-        cerr << "ERR: Impossible generate ID" << endl;
-        return "";
-    }
-
-    std::ostringstream oss;
-    oss << std::hex << std::setfill('0');
-    for (int i = 0; i < idSize; ++i) {
-        oss << std::setw(2) << static_cast<unsigned int>(id[i]);
-    }
-    string salt_hex = oss.str();
-    cout << salt_hex << endl;
-    free(id);
-    return salt_hex;
-}
-
-string getBalanceFromFileRow(unsigned char* fileRow){
-    string s = (char * )fileRow;
-    string delimiter = " ";
-    int pos = 0;
-    int delimiterPos = 0;
-
-    delimiterPos = s.find(delimiter , pos);
-    cout << "delimiterPOS : " << delimiterPos << endl;
-    s = s.substr(delimiterPos + 1);
-    return s;
-}
-
-string getUserIDFromFileRow(unsigned char* fileRow){
-    string s = (char * )fileRow;
-    string delimiter = " ";
-    int pos = 0;
-    int delimiterPos = 0;
-
-    delimiterPos = s.find(delimiter , pos);
-    s = s.substr(pos , delimiterPos);
-    return s;
-}
-
-void updateUserBalance(string user, int amount){
-    unsigned char *idAndBalance = decrypt_file("./src/server/" + user + "Balance.txt.enc");
-    string userID = getUserIDFromFileRow(idAndBalance);
-    int userBalance = stoi(getBalanceFromFileRow(idAndBalance));
-
-    string newRow = userID + " " + to_string(userBalance + amount);
-    cout<< "new ROW : " << newRow << endl;
-    encrypt_file("./src/server/" + user + "Balance.txt.enc" , "OVERWRITE" , newRow);
-}
-
-bool fileExists(const string filename) {
-    ifstream file(filename);
-    return file.good();
-}
-
-void addTransaction(string transactionID, string user, string userToWrite, int amount, uint64_t timestamp){
-    string filename = "./src/server/" + user + "History.txt.enc";
-    string fileAccessMode = "APPEND";
-    string fileRow;
-    
-    if(!fileExists(filename)){
-        cout << "creo il file "<< filename << endl;
-        // create the file
-        ofstream file(filename);
-        file.close();
-        fileAccessMode = "OVERWRITE";
-        fileRow = "";
-    }
-
-    fileRow += transactionID + " " + userToWrite + " " + to_string(amount) + " " + to_string(timestamp) + "\n";
-    encrypt_file(filename , fileAccessMode , fileRow);
-
-}
-
-// Returns balance
-string return_balance(string currentUser)
-{
-    if (!check_username(currentUser))
-        return "";
-    unsigned char *idAndBalance = decrypt_file("./src/server/" + currentUser + "Balance.txt.enc");
-    return getBalanceFromFileRow(idAndBalance);
-}
-
-// Returns the balance to the user
-string balance(client_info rcv_pkt)
-{
-    server_info response_pkt;
-    string balance = return_balance(logged_user);
-    cout << "balance ottenuto  : " << balance << endl;
-    if (balance == ""){
-        response_pkt.responseCode = 500;
-        response_pkt.responseContent = "Balance Error.";
-    }else{
-        response_pkt.responseCode = 200;
-        response_pkt.responseContent = balance;
-    }
-    response_pkt.timestamp = rcv_pkt.timestamp;
-    
-    // Serialize packet
-    return response_pkt.serializePacket();
-}
-
-string getUserHistory(){
-    string fileName = "./src/server/" + logged_user + "History.txt.enc";
-    unsigned char * historyContent = decrypt_file(fileName);
-    string content = (char *)historyContent;
-    string historyResult;
-    istringstream iss(content);
-    string line;
-    int lineCount = 0;
-
-    while (std::getline(iss, line) && lineCount < 5) {
-        std::cout << line << std::endl;
-        if(lineCount != 0) historyResult +="\n";
-        historyResult += line;
-        lineCount++;
-    }
-    return historyResult;
-}
-
-// Transfer an amount of money to another user
-string transfer(client_info rcv_pkt)
-{
-    // Build response pkt
-    server_info response_pkt;
-    string dest;
-    int amount;
-    string s = rcv_pkt.destAndAmount;
-    string delimiter = "-";
-    unsigned int pos;
-
-    pos = s.find(delimiter, 0);
-    dest = s.substr(0 , pos);
-    amount = stoi(s.substr(pos + 1));
-
-    try{
-        // check if the username is valid
-        if(!check_username(dest)){
-            cerr << "ERR: Receiver doesn't exist." << endl;
-            response_pkt.responseCode = 500;
-            response_pkt.responseContent = "Invalid dest";
-            throw exception();
-        }
-
-        int senderBalance = stoi(return_balance(logged_user));
-        if(senderBalance < amount) {
-            cerr << "ERR: Amount not available." << endl;
-            response_pkt.responseCode = 500;
-            response_pkt.responseContent = "Invalid amount";
-            throw exception();
-        }
-
-        uint64_t currentTimestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        string transactionID = generateID();
-
-        if(transactionID == ""){
-            cerr << "ERR: Impossible to generate ID" << endl;
-            response_pkt.responseCode = 500;
-            response_pkt.responseContent = "Generic error";
-            throw exception();
-        }
-
-        updateUserBalance(logged_user, -amount);
-        updateUserBalance(dest, amount);
-        
-        addTransaction(transactionID, logged_user, dest, -amount ,currentTimestamp);
-        addTransaction(transactionID, dest, logged_user, amount ,currentTimestamp);
-
-        response_pkt.responseCode = 200;
-        response_pkt.timestamp = rcv_pkt.timestamp;   
-        response_pkt.responseContent = "OK";   
-
-        return response_pkt.serializePacket();
-
-    }catch(...){
-        return response_pkt.serializePacket();
-    }
-
-}
-
-
-// Send to requesting user the History of the transactions performed
-string history(client_info rcv_pkt)
-{
-    server_info response_pkt;
-    string userHistory = getUserHistory();
-    response_pkt.responseContent = userHistory;
-    response_pkt.responseCode = 200;
-    response_pkt.timestamp = rcv_pkt.timestamp;
-    return response_pkt.serializePacket();
-}
-
-// Logout
-string logout(client_info rcv_pkt)
-{
-    counter = counter + 1;
-
-    // Build response packet
-    server_info response_pkt;
-    response_pkt.timestamp = rcv_pkt.timestamp;
-    response_pkt.responseCode = 200;
-    response_pkt.responseContent = "OK";
-    // Serialize packet
-    return response_pkt.serializePacket();
-}
 
 // Load private key into memory
 bool load_private_server_key()
@@ -322,13 +79,13 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
     ret = recv(currentSocket, &len, sizeof(uint32_t), 0);
     if (ret == 0)
     {
-        cerr << "ERR: Client disconnected" << endl
+        cerr << "[ERROR] Client disconnected" << endl
              << endl;
         return -2;
     }
     if (ret < 0 || (unsigned long)ret < sizeof(len))
     {
-        cerr << "ERR: Message length received is too short" << endl
+        cerr << "[ERROR] Message length received is too short" << endl
              << endl;
         return -1;
     }
@@ -339,7 +96,7 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
         recv_buffer = (unsigned char *)malloc(len);
         if (!recv_buffer)
         {
-            cerr << "ERR: recv_buffer malloc fail" << endl
+            cerr << "[ERROR] recv_buffer malloc fail" << endl
                  << endl;
             throw 1;
         }
@@ -347,13 +104,13 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
         ret = recv(currentSocket, recv_buffer, len, 0);
         if (ret == 0)
         {
-            cerr << "ERR: Client disconnected" << endl
+            cerr << "[ERROR] Client disconnected" << endl
                  << endl;
             throw 2;
         }
         if (ret < 0 || (unsigned long)ret < sizeof(len))
         {
-            cerr << "ERR: Message received is too short" << endl
+            cerr << "[ERROR] Message received is too short" << endl
                  << endl;
             throw 3;
         }
@@ -377,14 +134,13 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
 bool send_message(void *msg, const uint32_t len)
 {
     ssize_t ret;
-    cout << "len : " << len << endl;
     uint32_t actual_len = htonl(len);
     // Send message length
     ret = send(currentSocket, &actual_len, sizeof(actual_len), 0);
     // If -1 error it means that no bytes were sent
     if (ret <= 0)
     {
-        cerr << "ERR: Message length not sent" << endl
+        cerr << "[ERROR] Message length not sent" << endl
              << endl;
         return false;
     }
@@ -393,12 +149,13 @@ bool send_message(void *msg, const uint32_t len)
     // If -1 error it means that no bytes were sent
     if (ret <= 0)
     {
-        cerr << "ERR: Message not sent" << endl
+        cerr << "[ERROR] Message not sent" << endl
              << endl;
         return false;
     }
     return true;
 }
+
 
 // Not encrypted pkt to start dialog
 void receive_wave_pkt(wave_pkt &pkt)
@@ -469,6 +226,9 @@ void receive_wave_pkt(wave_pkt &pkt)
     // Correct packet
     free(receive_buffer);
 }
+
+
+
 
 // Send the server authentication packet
 void send_login_server_authentication(login_authentication_pkt &pkt)
@@ -674,6 +434,7 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
     free(signed_text);
 }
 
+
 bool start_session()
 {
     int ret;
@@ -696,22 +457,22 @@ bool start_session()
         {
         case 1:
         {
-            cerr << "ERR: some error in receiving wave_pkt" << endl;
+            cerr << "[ERROR] some error in receiving wave_pkt" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: some error in deserialize wave_pkt" << endl;
+            cerr << "[ERROR] some error in deserialize wave_pkt" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: username " + hello_pkt.username + " is not registered" << endl;
+            cerr << "[ERROR] username " + hello_pkt.username + " is not registered" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: one of the key params is not valid" << endl;
+            cerr << "[ERROR] one of the key params is not valid" << endl;
             break;
         }
         }
@@ -726,7 +487,7 @@ bool start_session()
 
     if (server_auth_pkt.symmetric_key_param_server == nullptr)
     {
-        cerr << "ERR: Couldn't generate session key params!" << endl;
+        cerr << "[ERROR] Couldn't generate session key params!" << endl;
         return false;
     }
 
@@ -735,7 +496,7 @@ bool start_session()
 
     if (server_auth_pkt.hmac_key_param_server == nullptr)
     {
-        cerr << "ERR: Couldn't generate session key params!" << endl;
+        cerr << "[ERROR] Couldn't generate session key params!" << endl;
         return false;
     }
 
@@ -748,7 +509,7 @@ bool start_session()
 
     if (!symmetric_key_no_hashed)
     {
-        cerr << "ERR: Couldn't derive symm key!" << endl;
+        cerr << "[ERROR] Couldn't derive symm key!" << endl;
         return false;
     }
     ret = hash_symmetric_key(symmetric_key, symmetric_key_no_hashed);
@@ -756,7 +517,7 @@ bool start_session()
 
     if (ret != 0)
     {
-        cerr << "ERR: Couldn't hash symm key!" << endl;
+        cerr << "[ERROR] Couldn't hash symm key!" << endl;
         return false;
     }
 
@@ -764,7 +525,7 @@ bool start_session()
 
     if (!hmac_key_no_hashed)
     {
-        cerr << "ERR: Couldn't derive hmac key!" << endl;
+        cerr << "[ERROR] Couldn't derive hmac key!" << endl;
         return false;
     }
     ret = hash_hmac_key(hmac_key, hmac_key_no_hashed);
@@ -772,7 +533,7 @@ bool start_session()
 
     if (ret != 0)
     {
-        cerr << "ERR: Couldn't hash hmac key!" << endl;
+        cerr << "[ERROR] Couldn't hash hmac key!" << endl;
         return false;
     }
 
@@ -791,32 +552,32 @@ bool start_session()
         {
         case 0:
         {
-            cerr << "ERR: Couldn't generate iv!" << endl;
+            cerr << "[ERROR] Couldn't generate iv!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't serialize part to Encrypt!" << endl;
+            cerr << "[ERROR] Couldn't serialize part to Encrypt!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't generate a valid Signature!" << endl;
+            cerr << "[ERROR] Couldn't generate a valid Signature!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't generate a valid Ciphertext!" << endl;
+            cerr << "[ERROR] Couldn't generate a valid Ciphertext!" << endl;
             break;
         }
         case 5:
         {
-            cerr << "ERR: Couldn't send the final pkt!" << endl;
+            cerr << "[ERROR] Couldn't send the final pkt!" << endl;
             break;
         }
         }
@@ -840,32 +601,32 @@ bool start_session()
         {
         case 1:
         {
-            cerr << "ERR: Couldn't receive login_server_authentication_pkt!" << endl;
+            cerr << "[ERROR] Couldn't receive login_server_authentication_pkt!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't deserialize client_auth_pkt!" << endl;
+            cerr << "[ERROR] Couldn't deserialize client_auth_pkt!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't decrypt the packet!" << endl;
+            cerr << "[ERROR] Couldn't decrypt the packet!" << endl;
             break;
         }
         case 5:
         {
-            cerr << "ERR: Couldn't extract client's key!" << endl;
+            cerr << "[ERROR] Couldn't extract client's key!" << endl;
             break;
         }
         case 6:
         {
-            cerr << "ERR: Couldn't verify signature!" << endl;
+            cerr << "[ERROR] Couldn't verify signature!" << endl;
             break;
         }
         }
@@ -902,7 +663,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     // Encryption
     if (cbc_encrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
     {
-        cerr << "ERR: Couldn't decrypt!" << endl;
+        cerr << "[ERROR] Couldn't decrypt!" << endl;
         free(ciphertext);
         ciphertext = nullptr;
         return false;
@@ -912,7 +673,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     generated_MAC = (uint8_t *)malloc(IV_LENGTH + cipherlen + sizeof(cipherlen));
     if (!generated_MAC)
     {
-        cerr << "ERR: Couldn't malloc!" << endl;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
         return false;
     }
 
@@ -936,7 +697,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     // If we couldn't serialize the message!
     if (data == nullptr)
     {
-        cerr << "ERR: Couldn't serialize!" << endl;
+        cerr << "[ERROR] Couldn't serialize!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(ciphertext);
@@ -949,7 +710,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     // Send the message
     if (!send_message((void *)data, data_length))
     {
-        cerr << "ERR: Couldn't send message!" << endl;
+        cerr << "[ERROR] Couldn't send message!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(ciphertext);
@@ -989,7 +750,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     int ret = receive_message(data, length_rec);
     if (ret != 0)
     {
-        cerr << "ERR: Couldn't receive message, received error: " << ret << endl;
+        cerr << "[ERROR] Couldn't receive message, received error: " << ret << endl;
         data = nullptr;
         return nullptr;
     }
@@ -997,7 +758,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     // Deserialize message
     if (!rcvd_pkt.deserialize_message(data))
     {
-        cerr << "ERR: Couldn'r deserialize data!" << endl;
+        cerr << "[ERROR] Couldn'r deserialize data!" << endl;
         free(data);
         data = nullptr;
         return nullptr;
@@ -1010,7 +771,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     generated_MAC = (uint8_t *)malloc(IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len));
     if (!generated_MAC)
     {
-        cerr << "ERR: Couldn't malloc!" << endl;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
         return nullptr;
     }
 
@@ -1026,7 +787,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     // Verify HMAC
     if (!verify_SHA256(HMAC, rcvd_pkt.HMAC))
     {
-        cerr << "ERR: Couldn't verify HMAC!" << endl;
+        cerr << "[ERROR] Couldn't verify HMAC!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(rcvd_pkt.HMAC);
@@ -1037,7 +798,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     // Decrypt the ciphertext and obtain the plaintext
     if (cbc_decrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
     {
-        cerr << "ERR: Couldn't decrypt!" << endl;
+        cerr << "[ERROR] Couldn't decrypt!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(rcvd_pkt.HMAC);
@@ -1077,25 +838,25 @@ int handle_command()
         case BALANCE:
         {
             cout << "Received Balance command from " << logged_user << endl;
-            buffer = balance(pkt_simple);
+            buffer = balance(pkt_simple, logged_user);
             break;
         }
         case TRANSFER:
         {
             cout << "Received Transfer command from " << logged_user << endl;
-            buffer = transfer(pkt_simple);
+            buffer = transfer(pkt_simple, logged_user);
             break;
         }
         case HISTORY:
         {
             cout << "Received History command from " << logged_user << endl;
-            buffer = history(pkt_simple);
+            buffer = history(pkt_simple, logged_user);
             break;
         }
         case LOGOUT:
         {
             cout << "Received Logout command from " << logged_user << endl;
-            buffer = logout(pkt_simple);
+            buffer = logout(pkt_simple, logged_user);
             break;
         }
         default:
@@ -1126,28 +887,28 @@ int handle_command()
         {
         case 0:
         {
-            cerr << "ERR: Couldn't generate iv!" << endl;
+            cerr << "[ERROR] Couldn't generate iv!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't receive the message or verify it's HMAC!" << endl;
+            cerr << "[ERROR] Couldn't receive the message or verify it's HMAC!" << endl;
             return 2; //Client crashed!
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't deserialize packet!" << endl;
+            cerr << "[ERROR] Couldn't deserialize packet!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Something went wrong!" << endl;
+            cerr << "[ERROR] Something went wrong!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't encrypt and generate the MAC of the packet!" << endl;
+            cerr << "[ERROR] Couldn't encrypt and generate the MAC of the packet!" << endl;
             break;
         }
         }
@@ -1160,7 +921,7 @@ void ServeClient()
     // Load private server key
     if (!load_private_server_key())
     {
-        cerr << "ERR: Impossible to load private key!" << endl;
+        cerr << "[ERROR] Impossible to load private key!" << endl;
         exit(EXIT_FAILURE);
     }
 
@@ -1180,7 +941,7 @@ void ServeClient()
         // Error in handling the message
         if (ret == -1)
         {
-            cerr << "ERR: Server has incountered a fatal error, please restart the server!" << endl;
+            cerr << "[ERROR] Server has incountered a fatal error, please restart the server!" << endl;
             break;
         }
         else if (ret == 1)
@@ -1208,16 +969,16 @@ int main(int argc, char **argv)
     // Check if port has been specified
     if (argc < 2)
     {
-        cerr << "ERR: Port parameter is not present!" << endl;
+        cerr << "[ERROR] Port parameter is not present!" << endl;
         return -1;
     }
     //cout << "cifratura iniziale del file utenti" << endl;
-    //encrypt_file("./src/server/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
-    //encrypt_file("./src/server/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
-    //encrypt_file("./src/server/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
-    //encrypt_file("./src/server/bobBalance.txt.enc" , "OVERWRITE" , "6ed3509863adfbe4 200");
-    //encrypt_file("./src/server/aliceHistory.txt.enc" , "APPEND" , "\n");
-    //encrypt_file("./src/server/bobHistory.txt.enc" , "APPEND" , "\n");
+    //encrypt_file("./src/server/files/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
+    //encrypt_file("./src/server/files/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
+    //encrypt_file("./src/server/files/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
+    //encrypt_file("./src/server/files/bobBalance.txt.enc" , "OVERWRITE" , "6ed3509863adfbe4 200");
+    //encrypt_file("./src/server/files/aliceHistory.txt.enc" , "APPEND" , "\n");
+    //encrypt_file("./src/server/files/bobHistory.txt.enc" , "APPEND" , "\n");
     //------ Setting up the server ------//
 
     // Assign the port
@@ -1234,24 +995,24 @@ int main(int argc, char **argv)
     socketListener = socket(AF_INET, SOCK_STREAM, 0);
     if (socketListener == -1)
     {
-        cerr << "ERR: Socket couldn't be defined!" << endl;
+        cerr << "[ERROR] Socket couldn't be defined!" << endl;
         return -1;
     }
     int reuse = 1;
     if (setsockopt(socketListener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
-        cout << "ERR: Impossibile settare il REUSE" << endl;
+        cout << "[ERROR] Impossibile settare il REUSE" << endl;
         return -1;
     }
 
     // Bind and listen for incoming connections to a max of BACKLOG_SIZE pending
     if (bind(socketListener, (sockaddr *)&serverAddress, sizeof(serverAddress)) == -1)
     {
-        cerr << "ERR: Socket couldn't be binded" << endl;
+        cerr << "[ERROR] Socket couldn't be binded" << endl;
         return -1;
     }
     if (listen(socketListener, BACKLOG_SIZE) == -1)
     {
-        cerr << "ERR: Socket has reached max backlog queue size!" << endl;
+        cerr << "[ERROR] Socket has reached max backlog queue size!" << endl;
         return -1;
     }
 
@@ -1274,7 +1035,7 @@ int main(int argc, char **argv)
         // Failed connection
         if (currentSocket == -1)
         {
-            cerr << "ERR: new connection to client failed" << endl
+            cerr << "[ERROR] new connection to client failed" << endl
                  << endl;
             continue;
         }

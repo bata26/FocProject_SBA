@@ -50,13 +50,13 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
     ret = recv(sessionSocket, &len, sizeof(uint32_t), 0);
     if (ret == 0)
     {
-        cerr << "ERR: server disconnected" << endl
+        cerr << "[ERROR] server disconnected" << endl
              << endl;
         return -2;
     }
     if (ret < 0 || (unsigned long)ret < sizeof(len))
     {
-        cerr << "ERR: message length received is too short" << endl
+        cerr << "[ERROR] message length received is too short" << endl
              << endl;
         return -1;
     }
@@ -67,7 +67,7 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
         recv_buffer = (unsigned char *)malloc(len);
         if (!recv_buffer)
         {
-            cerr << "ERR: recv_buffer malloc fail" << endl
+            cerr << "[ERROR] recv_buffer malloc fail" << endl
                  << endl;
             throw 1;
         }
@@ -75,13 +75,13 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
         ret = recv(sessionSocket, recv_buffer, len, 0);
         if (ret == 0)
         {
-            cerr << "ERR: Client disconnected" << endl
+            cerr << "[ERROR] Client disconnected" << endl
                  << endl;
             throw 2;
         }
         if (ret < 0 || (unsigned long)ret < sizeof(len))
         {
-            cerr << "ERR: Message received is too short" << endl
+            cerr << "[ERROR] Message received is too short" << endl
                  << endl;
             throw 3;
         }
@@ -439,22 +439,22 @@ bool start_session()
         {
         case 1:
         {
-            cerr << "ERR: Couldn't generate a session key parameter!" << endl;
+            cerr << "[ERROR] Couldn't generate a session key parameter!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Couldn't serialize wave packet!" << endl;
+            cerr << "[ERROR] Couldn't serialize wave packet!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't send wave packet!" << endl;
+            cerr << "[ERROR] Couldn't send wave packet!" << endl;
             break;
         }
         }
@@ -476,42 +476,42 @@ bool start_session()
         {
         case 1:
         {
-            cerr << "ERR: Error in the received login_authentication_pkt" << endl;
+            cerr << "[ERROR] Error in the received login_authentication_pkt" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: some error in deserialize pkt" << endl;
+            cerr << "[ERROR] some error in deserialize pkt" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't derive symmetric key or hmac key!" << endl;
+            cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't hash symmetric key or hmac key!" << endl;
+            cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
             break;
         }
         case 5:
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             break;
         }
         case 6:
         {
-            cerr << "ERR: Couldn't decrypt server authentication packet!" << endl;
+            cerr << "[ERROR] Couldn't decrypt server authentication packet!" << endl;
             break;
         }
         case 7:
         {
-            cerr << "ERR: Couldn't extract server's public key!" << endl;
+            cerr << "[ERROR] Couldn't extract server's public key!" << endl;
             break;
         }
         case 8:
         {
-            cerr << "ERR: Couldn't verify the signature!" << endl;
+            cerr << "[ERROR] Couldn't verify the signature!" << endl;
             break;
         }
         }
@@ -540,27 +540,27 @@ bool start_session()
         {
         case 0:
         {
-            cerr << "ERR: Couldn't generate iv!" << endl;
+            cerr << "[ERROR] Couldn't generate iv!" << endl;
             break;
         }
         case 1:
         {
-            cerr << "ERR: Couldn't serialize part to encrypt!" << endl;
+            cerr << "[ERROR] Couldn't serialize part to encrypt!" << endl;
             break;
         }
         case 2:
         {
-            cerr << "ERR: Failed malloc!" << endl;
+            cerr << "[ERROR] Failed malloc!" << endl;
             break;
         }
         case 3:
         {
-            cerr << "ERR: Couldn't generate a valid signature or ciphertext!" << endl;
+            cerr << "[ERROR] Couldn't generate a valid signature or ciphertext!" << endl;
             break;
         }
         case 4:
         {
-            cerr << "ERR: Couldn't send message to the server!" << endl;
+            cerr << "[ERROR] Couldn't send message to the server!" << endl;
             break;
         }
         }
@@ -591,7 +591,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     // Encryption
     if (cbc_encrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
     {
-        cerr << "ERR: Couldn't encrypt!" << endl;
+        cerr << "[ERROR] Couldn't encrypt!" << endl;
         return false;
     }
 
@@ -599,7 +599,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     generated_MAC = (uint8_t *)malloc(IV_LENGTH + cipherlen + sizeof(cipherlen));
     if (!generated_MAC)
     {
-        cerr << "ERR: Couldn't malloc!" << endl;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
         return false;
     }
 
@@ -623,7 +623,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     //If we couldn't serialize the message!
     if (data == nullptr)
     {
-        cerr << "ERR: Couldn't serialize!" << endl;
+        cerr << "[ERROR] Couldn't serialize!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(ciphertext);
@@ -636,7 +636,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     // Send the message
     if (!send_message((void *)data, pkt_size))
     {
-        cerr << "ERR: Couldn't send message!" << endl;
+        cerr << "[ERROR] Couldn't send message!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(ciphertext);
@@ -675,7 +675,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     int ret = receive_message(data, length_rec);
     if (ret != 0)
     {
-        cerr << "ERR: some error in receiving MSG, received error: " << ret << endl;
+        cerr << "[ERROR] some error in receiving MSG, received error: " << ret << endl;
         free(data);
         data = nullptr;
         return nullptr;
@@ -713,7 +713,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     // Verify HMAC
     if (!verify_SHA256(HMAC, rcvd_pkt.HMAC))
     {
-        cerr << "ERR: Couldn't verify HMAC, try again" << endl;
+        cerr << "[ERROR] Couldn't verify HMAC, try again" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(rcvd_pkt.HMAC);
@@ -724,7 +724,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     // Decrypt the ciphertext and obtain the plaintext
     if (cbc_decrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
     {
-        cerr << "ERR: Couldn't encrypt!" << endl;
+        cerr << "[ERROR] Couldn't encrypt!" << endl;
         free(generated_MAC);
         generated_MAC = nullptr;
         free(rcvd_pkt.HMAC);
@@ -838,7 +838,7 @@ int main(int argc, char **argv)
     // Check port
     if (argc < 2)
     {
-        cerr << "ERR: Port parameter is not present" << endl;
+        cerr << "[ERROR] Port parameter is not present" << endl;
         return -1;
     }
     port = stoul(argv[1]);
@@ -848,17 +848,17 @@ int main(int argc, char **argv)
     cin >> username;
     if (!cin)
     {
-        cerr << "ERR: Couldn't insert username" << endl;
+        cerr << "[ERROR] Couldn't insert username" << endl;
         return -1;
     }
     if (username.length() > MAX_USERNAME_LENGTH || username.length() <= MIN_USERNAME_LENGTH)
     {
-        cerr << "ERR: Username length not respected" << endl;
+        cerr << "[ERROR] Username length not respected" << endl;
         return -1;
     }
     if (username.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
     {
-        cerr << "ERR: Username has been poorly formatted" << endl;
+        cerr << "[ERROR] Username has been poorly formatted" << endl;
         return -1;
     }
 
@@ -867,12 +867,12 @@ int main(int argc, char **argv)
     cin >> password;
     if (!cin)
     {
-        cerr << "ERR: Couldn't insert password" << endl;
+        cerr << "[ERROR] Couldn't insert password" << endl;
         return -1;
     }
     if (password.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
     {
-        cerr << "ERR: Password has been poorly formatted" << endl;
+        cerr << "[ERROR] Password has been poorly formatted" << endl;
         return -1;
     }
     cout << endl;
@@ -885,7 +885,7 @@ int main(int argc, char **argv)
 
     if (!file)
     {
-        cerr << "ERR: Username or password are wrong" << endl;
+        cerr << "[ERROR] Username or password are wrong" << endl;
         return -1;
     }
 
@@ -896,7 +896,7 @@ int main(int argc, char **argv)
 
     if (privk == nullptr)
     {
-        cerr << "ERR: Username or password are wrong" << endl;
+        cerr << "[ERROR] Username or password are wrong" << endl;
         return -1;
     }
 
@@ -908,7 +908,7 @@ int main(int argc, char **argv)
     sessionSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (sessionSocket < 0)
     {
-        cerr << "ERR: Socket creation failed" << endl;
+        cerr << "[ERROR] Socket creation failed" << endl;
         return -1;
     }
 
@@ -919,14 +919,14 @@ int main(int argc, char **argv)
     // server connection
     if (connect(sessionSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
     {
-        cerr << "ERR: Connection to server failed" << endl;
+        cerr << "[ERROR] Connection to server failed" << endl;
         return -1;
     }
 
     // Establish session and HMAC key
     if (!start_session())
     {
-        cerr << "ERR: Session keys establishment failed" << endl;
+        cerr << "[ERROR] Session keys establishment failed" << endl;
         return -1;
     }
 
@@ -944,65 +944,58 @@ int main(int argc, char **argv)
         string prov;
         int operation;
 
-        if (counter == numeric_limits<uint32_t>::max() - 1) // Avoid overflow sending as last a logout packet!
+        cout << "--------------------------------------------------" << endl
+            << "BANK: Insert the operation you want to perform:" << endl
+            << "1: Balance(): Returns your bankId and balance" << endl
+            << "2: Transfer(User, amount): Sends to the user the amount of money specified" << endl
+            << "3: History(): Returns the list of transfers" << endl
+            << "4: Logout(): Disconnects from the bank" << endl;
+        cout << "ME: ";
+        cin >> prov;
+        if(!cin)
         {
-            cout << "--------------------------------------------------" << endl
-             << "BANK: You have reached the maximum number of requests, you need to reconnect to the bank!" << endl;
-            operation = 4;
-        } else {
-            cout << "--------------------------------------------------" << endl
-             << "BANK: Insert the operation you want to perform:" << endl
-             << "1: Balance(): Returns your bankId and balance" << endl
-             << "2: Transfer(User, amount): Sends to the user the amount of money specified" << endl
-             << "3: History(): Returns the list of transfers" << endl
-             << "4: Logout(): Disconnects from the bank" << endl;
-            cout << "ME: ";
-            cin >> prov;
-            if(!cin)
-            {
-                cerr << "ERR: Couldn't insert operation!" << endl;
-                return -1;
-            }
-            if(prov.find_first_not_of(OPERATION_WHITELIST_NUMS) != std::string::npos)
-                prov = "0";
-            operation = stoi(prov);
-            if (operation >= 5 || operation <= 0)
-                operation = 0;
+            cerr << "[ERROR] Couldn't insert operation!" << endl;
+            return -1;
         }
+        if(prov.find_first_not_of(OPERATION_WHITELIST_NUMS) != std::string::npos)
+            prov = "0";
+        operation = stoi(prov);
+        if (operation >= 5 || operation <= 0)
+            operation = 0;
 
         try
         {
             switch (operation)
             {
-            case 1:
+            case BALANCE:
             {
-                string result = send_operation_packet(1);
-                cout << "BALANCE: " << result << endl;
+                string result = send_operation_packet(BALANCE);
+                cout << "[+]BALANCE: " << result << endl;
                 break;
             }
-            case 2:
+            case TRANSFER:
             {
-                string result = send_operation_packet(2);
-                cout << "BANK: Operation performed!" << endl;
+                string result = send_operation_packet(TRANSFER);
+                cout << "[+]BANK: Transaction Completed!" << endl;
                 break;
             }
-            case 3:
+            case HISTORY:
             {
-                string result = send_operation_packet(3);
-                cout << "BANK: --OPERATIONS--" << endl
+                string result = send_operation_packet(HISTORY);
+                cout << "[+]BANK: --TRANSACTIONS--" << endl
                      << result << endl;
                 break;
             }
-            case 4:
+            case LOGOUT:
             {
                 connected = false;
-                string result = send_operation_packet(4);
-                cout << "BANK: Goodbye!" << endl;
+                string result = send_operation_packet(LOGOUT);
+                cout << "[+]BANK: Bye!" << endl;
                 break;
             }
             default:
             {
-                cout << "BANK: Operation doesn't exist!" << endl;
+                cout << "[ERROR]BANK: Operation doesn't exist!" << endl;
                 break;
             }
             }
@@ -1013,37 +1006,37 @@ int main(int argc, char **argv)
             {
                 case 0:
                 {
-                    cerr << "ERR: Couldn't generate iv!" << endl;
+                    cerr << "[ERROR] Couldn't generate iv!" << endl;
                     break;
                 }
                 case 1:
                 {
-                    cerr << "ERR: Couldn't encrypt and generate HMAC!" << endl;
+                    cerr << "[ERROR] Couldn't encrypt and generate HMAC!" << endl;
                     break;
                 }
                 case 2:
                 {
-                    cerr << "ERR: Could't verify the HMAC of the received message!" << endl;
+                    cerr << "[ERROR] Could't verify the HMAC of the received message!" << endl;
                     break;
                 }
                 case 3:
                 {
-                    cerr << "ERR: Could't deserialized the received message!" << endl;
+                    cerr << "[ERROR] Could't deserialized the received message!" << endl;
                     break;
                 }
                 case 4:
                 {
-                    cerr << "ERR: Counter of the the received message is not correct!" << endl;
+                    cerr << "[ERROR] Counter of the the received message is not correct!" << endl;
                     break;
                 }
                 case 5:
                 {
-                    cerr << "ERR: Operation was not possible!" << endl;
+                    cerr << "[ERROR] Operation was not possible!" << endl;
                     break;
                 }
                 case 6:
                 {
-                    cerr << "ERR: Reformat the request!" << endl;
+                    cerr << "[ERROR] Reformat the request!" << endl;
                     break;
                 }
             }

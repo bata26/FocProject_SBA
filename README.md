@@ -60,9 +60,9 @@ Quindi i pacchetti avranno questa struttura generica:
 +---------+---------+
 
 - File di transfer (userHistory.enc.txt):
-+---------+---------+---------+
-|tranc_id | dest    | amount  |
-+---------+---------+---------+
++---------+---------+---------+-----------+
+|tranc_id | dest    | amount  | timestamp |
++---------+---------+---------+-----------+
 
 ### Accortezze
 - gestione tentativi password in caso si utilizzi

@@ -1,6 +1,11 @@
 # Prerequisites
 *.d
 
+server-exe
+client-exe
+encrypt.sh
+.vscode/
+README.pdf
 # Compiled Object files
 *.slo
 *.lo

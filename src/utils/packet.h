@@ -59,7 +59,7 @@ struct wave_pkt
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
@@ -117,7 +117,7 @@ struct wave_pkt
         //Checks code of the packet
         if (code != WAVE)
         {
-            cerr << "ERR: invalid packet code!" << endl;
+            cerr << "[ERROR] invalid packet code!" << endl;
             return false;
         }
 
@@ -168,7 +168,7 @@ struct wave_pkt
 
         if (hmac_key_param == nullptr || symmetric_key_param == nullptr)
         {
-            cerr << "ERR: Couldn't deserialize correctly a key! " << endl;
+            cerr << "[ERROR] Couldn't deserialize correctly a key! " << endl;
             return false;
         }
         return true;
@@ -219,7 +219,7 @@ struct login_authentication_pkt
         serialized_pte = (uint8_t *)malloc(len);
         if (!serialized_pte)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
@@ -265,7 +265,7 @@ struct login_authentication_pkt
 
         if (encrypted_signing == nullptr || encrypted_signing_len == 0 || iv_cbc == nullptr)
         {
-            cerr << "ERR: Missing field!" << endl;
+            cerr << "[ERROR] Missing field!" << endl;
             return nullptr;
         }
 
@@ -285,7 +285,7 @@ struct login_authentication_pkt
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
@@ -317,7 +317,7 @@ struct login_authentication_pkt
 
         if (encrypted_signing == nullptr || encrypted_signing_len == 0 || iv_cbc == nullptr)
         {
-            cerr << "ERR: Missing field!" << endl;
+            cerr << "[ERROR] Missing field!" << endl;
             return nullptr;
         }
 
@@ -329,7 +329,7 @@ struct login_authentication_pkt
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
@@ -380,7 +380,7 @@ struct login_authentication_pkt
         iv_cbc = (unsigned char *)malloc(IV_LENGTH);
         if (!iv_cbc)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
         memcpy(iv_cbc, serialized_pkt_received + pointer_counter, IV_LENGTH);
@@ -417,7 +417,7 @@ struct login_authentication_pkt
         encrypted_signing = (uint8_t *)malloc(encrypted_signing_len);
         if (!encrypted_signing)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
         memcpy(encrypted_signing, serialized_pkt_received + pointer_counter, encrypted_signing_len);
@@ -450,7 +450,7 @@ struct login_authentication_pkt
         iv_cbc = (unsigned char *)malloc(IV_LENGTH);
         if (!iv_cbc)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
         memcpy(iv_cbc, serialized_pkt_received + pointer_counter, IV_LENGTH);
@@ -472,61 +472,6 @@ struct login_authentication_pkt
         return true;
     }
 };
-
-/*
-struct client_pkt
-{
-    // Filled before serialization and after deserialization_decrypted
-    uint16_t code;
-    string receiverAndAmount;
-    uint32_t counter;
-
-    bool deserialize_plaintext(uint8_t *serialized_decrypted_pkt)
-    {
-
-        string s = (char *)serialized_decrypted_pkt;
-        string delimiter = "/";
-        unsigned int pos;
-
-        // Extract the code
-        pos = s.find(delimiter);
-        if (pos != string::npos)
-        {
-            string i = s.substr(0, pos);
-            code = stoi(i);
-            if (code != BALANCE && code != TRANSFER && code != HISTORY && code != LOGOUT)
-            {
-                cout << code << endl;
-                return false;
-            }
-            s.erase(0, pos + delimiter.length());
-        }
-
-        // Extract the receiverAndAmount
-        pos = s.find(delimiter);
-        string i = s.substr(0, pos);
-        receiverAndAmount = i;
-        s.erase(0, pos + delimiter.length());
-
-        // Extract the counter
-        pos = s.find(delimiter);
-        if (pos != string::npos)
-        {
-            string i = s.substr(0, pos);
-            counter = stoul(i);
-            s.erase(0, pos + delimiter.length());
-        }
-
-        free(serialized_decrypted_pkt);
-        return true;
-    }
-
-    string serializePacket()
-    {
-        return to_string(this->code) + "/" + this->receiverAndAmount + "/" + to_string(this->counter) + "/";
-    }
-};
-*/
 
 struct server_info
 {
@@ -579,7 +524,7 @@ struct communication_pkt
         iv = (unsigned char *)malloc(IV_LENGTH);
         if (!iv)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             free(serialized_pkt);
             return false;
         }
@@ -596,7 +541,7 @@ struct communication_pkt
         // Check for tainted cipherlen
         if (cipher_len >= MAX_PKT_SIZE)
         {
-            cerr << "ERR: Possible tainted cipher received!" << endl;
+            cerr << "[ERROR] Possible tainted cipher received!" << endl;
             free(serialized_pkt);
             free(iv);
             return false;
@@ -605,7 +550,7 @@ struct communication_pkt
         ciphertext = (uint8_t *)malloc(cipher_len);
         if (!ciphertext)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             free(serialized_pkt);
             free(iv);
             return false;
@@ -617,7 +562,7 @@ struct communication_pkt
         HMAC = (unsigned char *)malloc(HMAC_LENGTH);
         if (!HMAC)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             free(serialized_pkt);
             free(ciphertext);
             free(iv);
@@ -664,7 +609,7 @@ struct communication_pkt
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
         {
-            cerr << "ERR: Couldn't malloc!" << endl;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
@@ -706,8 +651,6 @@ struct client_info{
         unsigned int delimiterPos = 0;
 
         delimiterPos = content.find(delimiter, pos);
-        cout << "delimiter pos: " << delimiterPos << endl;
-        cout << "substr : " << content.substr(pos, delimiterPos - pos) << endl;
         operationCode = stoi(content.substr(pos, delimiterPos - pos));
 
         if(operationCode < 1 || operationCode > 4){
