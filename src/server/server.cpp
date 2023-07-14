@@ -1176,9 +1176,10 @@ int main(int argc, char **argv)
         return -1;
     }
     //cout << "cifratura iniziale del file utenti" << endl;
-    //encrypt_file("./src/server/users.txt.enc" , "OVERWRITE" , "bob $5$dErDd6C0$6B/Lajma9W/eWBpPUXz4P0ltInNaghv8j5CWywF7tk8 28453bf70b3cc27b 100");
-    //encrypt_file("./src/server/users.txt.enc" , "APPEND" , "\nalice $5$dErDd6C0$6B/Lajma9W/eWBpPUXz4P0ltInNaghv8j5CWywF7tk8 28453bf70b3cc27b 100");
-    //encrypt_file("./src/server/aliceBalance.txt.enc" , "OVERWRITE" , "28453bf70b3cc27b 100");
+    encrypt_file("./src/server/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
+    encrypt_file("./src/server/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
+    encrypt_file("./src/server/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
+    encrypt_file("./src/server/bobBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 200");
     //------ Setting up the server ------//
 
     // Assign the port

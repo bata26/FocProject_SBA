@@ -54,10 +54,15 @@ Quindi i pacchetti avranno questa struttura generica:
 
 
 # Gestione dei file
-- File di balance:
+- File di balance (userBalance.enc.txt):
 +---------+---------+
 | user_id | balance |
 +---------+---------+
+
+- File di transfer (userHistory.enc.txt):
++---------+---------+---------+
+|tranc_id | dest    | amount  |
++---------+---------+---------+
 
 ### Accortezze
 - gestione tentativi password in caso si utilizzi
@@ -79,3 +84,13 @@ openssl rsautl -encrypt -in users.txt -out users.txt.enc -inkey keys/server_priv
 openssl rsautl -decrypt -inkey server_privK.pem -in users.txt.enc -out users.txt
 ```
 
+- generare chiavi private e publice
+```console
+openssl genrsa -aes128 -f4 -out user_privK.pem
+openssl rsa -in user_privK.pem -outform PEM -pubout -out user_pubK.pem
+```
+
+- hash psw
+```console
+openssl passwd -1 -salt $(openssl rand -base64 6) <password>
+```
