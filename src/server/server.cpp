@@ -39,14 +39,14 @@ uint32_t counter = 0;
 
 // Iv
 unsigned char *iv = nullptr;
-int iv_size = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
+int ivSize = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
 
 // keys
 EVP_PKEY *private_key = nullptr;
 unsigned char *symmetric_key = nullptr;
 unsigned char *hmac_key = nullptr;
 int symmetric_key_length = EVP_CIPHER_key_length(EVP_aes_128_cbc());
-int hmac_key_length = HMAC_KEY_SIZE;
+int hmacKeyLength = HMAC_KEY_SIZE;
 
 // Load private key into memory
 bool load_private_server_key()
@@ -72,7 +72,7 @@ bool load_private_server_key()
 }
 
 // Receive message thorugh socket
-int receive_message(unsigned char *&recv_buffer, uint32_t &len)
+int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
 {
     ssize_t ret;
     // Receive message length
@@ -165,7 +165,7 @@ void receive_wave_pkt(wave_pkt &pkt)
     uint32_t len;
 
     // Receive message
-    if (receive_message(receive_buffer, len) < 0)
+    if (receiveMessage(receive_buffer, len) < 0)
     {
         free(receive_buffer);
         throw 1;
@@ -341,7 +341,7 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
     uint32_t plainlen;
 
     // Receive message
-    if (receive_message(receive_buffer, len) < 0)
+    if (receiveMessage(receive_buffer, len) < 0)
     {
         throw 1;
     }
@@ -359,14 +359,14 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
         free(iv);
     }
     iv = nullptr;
-    iv = (unsigned char *)malloc(iv_size);
+    iv = (unsigned char *)malloc(ivSize);
     if (!iv)
     {
         free(receive_buffer);
         throw 3;
     }
 
-    memcpy(iv, pkt.iv_cbc, iv_size);
+    memcpy(iv, pkt.iv_cbc, ivSize);
     //free(server_auth_pkt.iv_cbc);
     ret = cbcDecrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
 
@@ -744,7 +744,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
 
     
     // Receive the serialized data
-    int ret = receive_message(data, length_rec);
+    int ret = receiveMessage(data, length_rec);
     if (ret != 0)
     {
         cerr << "[ERROR] Couldn't receive message, received error: " << ret << endl;

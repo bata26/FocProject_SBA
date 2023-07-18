@@ -19,7 +19,7 @@ using namespace std;
 
 struct wave_pkt
 {
-    uint16_t code = WAVE;
+    uint16_t code = HELLO;
     uint16_t username_len;
     string username;
     uint32_t symmetric_key_param_len;
@@ -115,7 +115,7 @@ struct wave_pkt
         pointer_counter += sizeof(code);
 
         //Checks code of the packet
-        if (code != WAVE)
+        if (code != HELLO)
         {
             cerr << "[ERROR] invalid packet code!" << endl;
             return false;

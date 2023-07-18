@@ -14,7 +14,7 @@
 #define OPERATION_WHITELIST_NUMS "1234"
 #define TRANSFER_WHITELIST_NUMS "1234567890"
 //Structures for network communication
-#define WAVE 1
+#define HELLO 1
 //Operations
 #define BALANCE 1
 #define TRANSFER 2

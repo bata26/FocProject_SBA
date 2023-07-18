@@ -30,20 +30,20 @@ string server_pubK_path = "./server_pubK.pem";
 
 // iv
 unsigned char *iv = nullptr;
-int iv_size = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
+int ivSize = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
 
 // Keys
 EVP_PKEY *private_key = nullptr;
-EVP_PKEY *server_pubk = nullptr;
+EVP_PKEY *serverPubk = nullptr;
 unsigned char *symmetric_key = nullptr;
 unsigned char *hmac_key = nullptr;
 int symmetric_key_length = EVP_CIPHER_key_length(EVP_aes_256_gcm());
-int hmac_key_length = HMAC_KEY_SIZE;
+int hmacKeyLength = HMAC_KEY_SIZE;
 
 uint64_t lastTimestampSended;
 
 // Receive message from socket
-int receive_message(unsigned char *&recv_buffer, uint32_t &len)
+int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
 {
     ssize_t ret;
     // Receive message length
@@ -86,10 +86,10 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
             throw 3;
         }
     }
-    catch (int error_code)
+    catch (int errorCode)
     {
         free(recv_buffer);
-        if (error_code == 2)
+        if (errorCode == 2)
         {
             return -2;
         }
@@ -102,10 +102,10 @@ int receive_message(unsigned char *&recv_buffer, uint32_t &len)
 }
 
 // Send message through socket
-bool send_message(void *msg, const uint32_t len)
+bool send_message(void *msg, const uint32_t hostLen)
 {
     ssize_t ret;
-    uint32_t actual_len = htonl(len);
+    uint32_t actual_len = htonl(hostLen);
     // send message length
     ret = send(sessionSocket, &actual_len, sizeof(actual_len), 0);
     // -1 error, if returns 0 no bytes are sent
@@ -115,7 +115,7 @@ bool send_message(void *msg, const uint32_t len)
         return false;
     }
     // send message
-    ret = send(sessionSocket, msg, len, 0);
+    ret = send(sessionSocket, msg, hostLen, 0);
     // -1 error, if returns 0 no bytes are sent
     if (ret <= 0)
     {
@@ -126,51 +126,55 @@ bool send_message(void *msg, const uint32_t len)
 }
 
 // Send first packet to start the comm
-void send_wave_pkt(wave_pkt &pkt)
+void sendFirstPkt(wave_pkt &pkt)
 {
-    unsigned char *send_buffer;
+    unsigned char *buffer;
     int len;
-    unsigned char *to_copy;
+    unsigned char *toCopy;
 
-    pkt.code = WAVE;
+    pkt.code = HELLO;
     pkt.username = username;
 
     pkt.symmetric_key_param = generateDhKey();
     pkt.hmac_key_param = generateDhKey();
-
+    
     if (pkt.symmetric_key_param == nullptr || pkt.hmac_key_param == nullptr)
     {
-        throw 1;
+        cerr << "[ERROR] Couldn't generate a session key parameter!" << endl;
+        throw exception();
     }
 
-    to_copy = (unsigned char *)pkt.serialize_message(len);
+    toCopy = (unsigned char *)pkt.serialize_message(len);
 
-    if (to_copy == nullptr)
+    if (toCopy == nullptr)
     {
-        free(to_copy);
-        throw 2;
+        free(toCopy);
+        cerr << "[ERROR] Couldn't serialize wave packet!" << endl;
+        throw exception();
     }
 
-    send_buffer = (unsigned char *)malloc(len);
+    buffer = (unsigned char *)malloc(len);
 
-    if (!send_buffer)
+    if (!buffer)
     {
-        free(send_buffer);
-        free(to_copy);
-        throw 3;
+        free(buffer);
+        free(toCopy);
+        cerr << "[ERROR] Couldn't malloc!" << endl;
+        throw exception();
     }
 
-    memcpy(send_buffer, to_copy, len);
+    memcpy(buffer, toCopy, len);
 
-    if (!send_message(send_buffer, len))
+    if (!send_message(buffer, len))
     {
-        free(send_buffer);
-        free(to_copy);
-        throw 4;
+        free(buffer);
+        free(toCopy);
+        cerr << "[ERROR] Couldn't send wave packet!" << endl;
+        throw exception();
     }
 
-    free(send_buffer);
-    free(to_copy);
+    free(buffer);
+    free(toCopy);
 }
 
 // Receive the server authentication packet
@@ -187,10 +191,11 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     int signed_text_len;
 
     // Receive message
-    if (receive_message(receive_buffer, len) < 0)
+    if (receiveMessage(receive_buffer, len) < 0)
     {
         free(receive_buffer);
-        throw 1;
+        cerr << "[ERROR] Error in the received login_authentication_pkt" << endl;
+        throw exception();
     }
 
 
@@ -198,7 +203,8 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     if (!pkt.deserialize_message(receive_buffer))
     {
         free(receive_buffer);
-        throw 2;
+        cerr << "[ERROR] some error in deserialize pkt" << endl;
+        throw exception();
     }
 
     // Derive symmetric key and hmac key, hash them and take a portion of the hash for the 128 bit key
@@ -207,27 +213,31 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     if (!symmetric_key_no_hashed)
     {
         free(receive_buffer);
-        throw 3;
+        cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
+        throw exception();
     }
 
     ret = hashKey(symmetric_key, symmetric_key_no_hashed);
     if (ret != 0)
     {
         free(receive_buffer);
-        throw 4;
+        cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
+        throw exception();
     }
 
     hmac_key_no_hashed = deriveSharedSecret(hello_pkt.hmac_key_param, pkt.hmac_key_param_server_clear);
     if (!hmac_key_no_hashed)
     {
-        throw 3;
+        cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
+        throw exception();
     }
 
     ret = hashHmacKey(hmac_key, hmac_key_no_hashed);
     if (ret != 0)
     {
         free(receive_buffer);
-        throw 4;
+        cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
+        throw exception();
     }
 
     // Clear the non hashed keys
@@ -240,16 +250,17 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         free(iv);
     }
 
-    iv = (unsigned char *)malloc(iv_size);
+    iv = (unsigned char *)malloc(ivSize);
     if (!iv)
     {
         free(receive_buffer);
         free(iv);
         iv = nullptr;
-        throw 5;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
+        throw exception();
     }
 
-    memcpy(iv, pkt.iv_cbc, iv_size);
+    memcpy(iv, pkt.iv_cbc, ivSize);
     free(pkt.iv_cbc);
 
     ret = cbcDecrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
@@ -260,22 +271,24 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         free(iv);
         iv = nullptr;
         free(plaintext);
-        throw 6;
+        cerr << "[ERROR] Couldn't decrypt server authentication packet!" << endl;
+        throw exception();
     }
 
     // Extract server public key
     FILE *server_pubkey_file = fopen("./src/client/keys/server_pubK.pem", "r");
-    server_pubk = PEM_read_PUBKEY(server_pubkey_file, NULL, NULL, NULL);
+    serverPubk = PEM_read_PUBKEY(server_pubkey_file, NULL, NULL, NULL);
     fclose(server_pubkey_file);
 
-    if (server_pubk == nullptr)
+    if (serverPubk == nullptr)
     {
         free(receive_buffer);
         free(iv);
         iv = nullptr;
         free(plaintext);
-        EVP_PKEY_free(server_pubk);
-        throw 7;
+        EVP_PKEY_free(serverPubk);
+        cerr << "[ERROR] Couldn't extract server's public key!" << endl;
+        throw exception();
     }
 
     // Save received fields
@@ -298,23 +311,25 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         free(iv);
         iv = nullptr;
         free(plaintext);
-        EVP_PKEY_free(server_pubk);
+        EVP_PKEY_free(serverPubk);
         free(signed_text);
-        throw 5;
+        cerr << "[ERROR] Couldn't malloc!" << endl;
+        throw exception();
     }
     memcpy(signed_text, to_copy, signed_text_len);
 
     // Verify the signature
-    ret = verifySignature(server_pubk, plaintext, plainlen, signed_text, signed_text_len);
+    ret = verifySignature(serverPubk, plaintext, plainlen, signed_text, signed_text_len);
     if (ret != 0)
     {
         free(receive_buffer);
         free(iv);
         iv = nullptr;
         free(plaintext);
-        EVP_PKEY_free(server_pubk);
+        EVP_PKEY_free(serverPubk);
         free(signed_text);
-        throw 8;
+        cerr << "[ERROR] Couldn't verify the signature!" << endl;
+        throw exception();
     }
 
     // Frees
@@ -327,50 +342,54 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
 // Send the client authentication packet encrypted
 void send_login_client_authentication(login_authentication_pkt &pkt)
 {
-    unsigned char *part_to_encrypt;
+    unsigned char *toEncrypt;
     int pte_len;
-    int final_pkt_len;
-    unsigned int signature_len;
+    int finalLen;
+    unsigned int signatureLen;
     unsigned char *signature;
     unsigned char *ciphertext;
-    unsigned char *final_pkt;
-    unsigned char *to_copy;
+    unsigned char *finalPkt;
+    unsigned char *toCopy;
     int cipherlen;
     int ret;
 
     // Serialize the part to encrypt
-    to_copy = (unsigned char *)pkt.serialize_part_to_encrypt(pte_len);
-    if (to_copy == nullptr)
-        throw 1;
-
-    part_to_encrypt = (unsigned char *)malloc(pte_len);
-    if (part_to_encrypt == nullptr)
+    toCopy = (unsigned char *)pkt.serialize_part_to_encrypt(pte_len);
+    if (toCopy == nullptr){
+        cerr << "[ERROR] Couldn't serialize part to encrypt!" << endl;
+        throw exception();
+    }
+    toEncrypt = (unsigned char *)malloc(pte_len);
+    if (toEncrypt == nullptr)
     {
-        free(to_copy);
-        throw 2;
+        free(toCopy);
+        cerr << "[ERROR] Failed malloc!" << endl;
+        throw exception();
     }
 
-    memcpy(part_to_encrypt, to_copy, pte_len);
+    memcpy(toEncrypt, toCopy, pte_len);
 
     // Sign the document
-    signature = signMessage(private_key, part_to_encrypt, pte_len, signature_len);
+    signature = signMessage(private_key, toEncrypt, pte_len, signatureLen);
     if (signature == nullptr)
     {
-        free(to_copy);
-        free(part_to_encrypt);
-        throw 3;
+        free(toCopy);
+        free(toEncrypt);
+        cerr << "[ERROR] Couldn't generate signature!" << endl;
+        throw exception();
     }
 
-    iv = generateIV(); // THROWS 0
+    iv = generateIV(); // THROWSexception()0
 
     // Encrypt
-    ret = cbcEncrypt(signature, signature_len, ciphertext, cipherlen, symmetric_key, iv);
+    ret = cbcEncrypt(signature, signatureLen, ciphertext, cipherlen, symmetric_key, iv);
     if (ret != 0)
     {
-        free(to_copy);
-        free(part_to_encrypt);
+        free(toCopy);
+        free(toEncrypt);
         free(signature);
-        throw 3;
+        cerr << "[ERROR] Couldn't generate ciphertext!" << endl;
+        throw exception();
     }
 
     // Assign to packet values
@@ -379,34 +398,35 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     pkt.encrypted_signing_len = cipherlen;
 
     // Final serialization
-    free(to_copy);
-    free(part_to_encrypt);
+    free(toCopy);
+    free(toEncrypt);
 
-    to_copy = (unsigned char *)pkt.serialize_message_no_clear_keys(final_pkt_len);
+    toCopy = (unsigned char *)pkt.serialize_message_no_clear_keys(finalLen);
 
-    final_pkt = (unsigned char *)malloc(final_pkt_len);
-    if (!final_pkt)
+    finalPkt = (unsigned char *)malloc(finalLen);
+    if (!finalPkt)
     {
         free(ciphertext);
         free(iv);
         iv = nullptr;
         free(signature);
-        free(to_copy);
-        free(final_pkt);
-        throw 2;
+        free(toCopy);
+        free(finalPkt);
+        throw exception();
     }
 
-    memcpy(final_pkt, to_copy, final_pkt_len);
+    memcpy(finalPkt, toCopy, finalLen);
 
-    if (!send_message(final_pkt, final_pkt_len))
+    if (!send_message(finalPkt, finalLen))
     {
         free(ciphertext);
         free(iv);
         iv = nullptr;
         free(signature);
-        free(to_copy);
-        free(final_pkt);
-        throw 4;
+        free(toCopy);
+        free(finalPkt);
+        cerr << "[ERROR] Couldn't send message" << endl;
+        throw exception();
     }
 
     // Frees
@@ -414,8 +434,8 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     free(iv);
     iv = nullptr;
     free(signature);
-    free(to_copy);
-    free(final_pkt);
+    free(toCopy);
+    free(finalPkt);
 }
 
 // Function to establish a symmetric key
@@ -430,33 +450,10 @@ bool start_session()
     // Send wave
     try
     {
-        send_wave_pkt(hello_pkt);
+        sendFirstPkt(hello_pkt);
     }
-    catch (int error_code)
+    catch (...)
     {
-        switch (error_code)
-        {
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't generate a session key parameter!" << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] Couldn't serialize wave packet!" << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't malloc!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't send wave packet!" << endl;
-            break;
-        }
-        }
         EVP_PKEY_free(hello_pkt.symmetric_key_param);
         EVP_PKEY_free(hello_pkt.hmac_key_param);
         return false;
@@ -469,51 +466,8 @@ bool start_session()
     {
         receive_login_server_authentication(hello_pkt, server_auth_pkt);
     }
-    catch (int error_code)
+    catch (...)
     {
-        switch (error_code)
-        {
-        case 1:
-        {
-            cerr << "[ERROR] Error in the received login_authentication_pkt" << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] some error in deserialize pkt" << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
-            break;
-        }
-        case 5:
-        {
-            cerr << "[ERROR] Couldn't malloc!" << endl;
-            break;
-        }
-        case 6:
-        {
-            cerr << "[ERROR] Couldn't decrypt server authentication packet!" << endl;
-            break;
-        }
-        case 7:
-        {
-            cerr << "[ERROR] Couldn't extract server's public key!" << endl;
-            break;
-        }
-        case 8:
-        {
-            cerr << "[ERROR] Couldn't verify the signature!" << endl;
-            break;
-        }
-        }
         return false;
     }
 
@@ -533,36 +487,8 @@ bool start_session()
     {
         send_login_client_authentication(client_auth_pkt);
     }
-    catch (int error_code)
+    catch (...)
     {
-        switch (error_code)
-        {
-        case 0:
-        {
-            cerr << "[ERROR] Couldn't generate iv!" << endl;
-            break;
-        }
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't serialize part to encrypt!" << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] Failed malloc!" << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't generate a valid signature or ciphertext!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't send message to the server!" << endl;
-            break;
-        }
-        }
         return false;
     }
 
@@ -671,7 +597,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     uint8_t* HMAC;
 
     // Receive the serialized data
-    int ret = receive_message(data, length_rec);
+    int ret = receiveMessage(data, length_rec);
     if (ret != 0)
     {
         cerr << "[ERROR] some error in receiving MSG, received error: " << ret << endl;
