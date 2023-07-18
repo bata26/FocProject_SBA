@@ -6,7 +6,7 @@ bool check_username(string username)
 {
     if (username.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
         return false;
-    unsigned char *allUsers = decrypt_file("./src/server/files/users.txt.enc");
+    unsigned char *allUsers = decryptFile("./src/server/files/users.txt.enc");
     string userList((char *)allUsers);
     free(allUsers);
     string lineDelimiter = "\n";
@@ -72,12 +72,12 @@ string getUserIDFromFileRow(unsigned char* fileRow){
 }
 
 void updateUserBalance(string user, int amount){
-    unsigned char *idAndBalance = decrypt_file("./src/server/files/" + user + "Balance.txt.enc");
+    unsigned char *idAndBalance = decryptFile("./src/server/files/" + user + "Balance.txt.enc");
     string userID = getUserIDFromFileRow(idAndBalance);
     int userBalance = stoi(getBalanceFromFileRow(idAndBalance));
 
     string newRow = userID + " " + to_string(userBalance + amount);
-    encrypt_file("./src/server/files/" + user + "Balance.txt.enc" , "OVERWRITE" , newRow);
+    encryptFile("./src/server/files/" + user + "Balance.txt.enc" , "OVERWRITE" , newRow);
 }
 
 bool fileExists(const string filename) {
@@ -99,7 +99,7 @@ void addTransaction(string transactionID, string user, string userToWrite, int a
     }
 
     fileRow += transactionID + " " + userToWrite + " " + to_string(amount) + " " + to_string(timestamp) + "\n";
-    encrypt_file(filename , fileAccessMode , fileRow);
+    encryptFile(filename , fileAccessMode , fileRow);
 
 }
 
@@ -108,14 +108,14 @@ string return_balance(string currentUser)
 {
     if (!check_username(currentUser))
         return "";
-    unsigned char *idAndBalance = decrypt_file("./src/server/files/" + currentUser + "Balance.txt.enc");
+    unsigned char *idAndBalance = decryptFile("./src/server/files/" + currentUser + "Balance.txt.enc");
     return getBalanceFromFileRow(idAndBalance);
 }
 
 
 string getUserHistory(string logged_user){
     string fileName = "./src/server/files/" + logged_user + "History.txt.enc";
-    unsigned char * historyContent = decrypt_file(fileName);
+    unsigned char * historyContent = decryptFile(fileName);
     string content = (char *)historyContent;
     string historyResult;
     istringstream iss(content);

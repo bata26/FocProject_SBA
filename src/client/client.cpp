@@ -135,8 +135,8 @@ void send_wave_pkt(wave_pkt &pkt)
     pkt.code = WAVE;
     pkt.username = username;
 
-    pkt.symmetric_key_param = generate_dh_key();
-    pkt.hmac_key_param = generate_dh_key();
+    pkt.symmetric_key_param = generateDhKey();
+    pkt.hmac_key_param = generateDhKey();
 
     if (pkt.symmetric_key_param == nullptr || pkt.hmac_key_param == nullptr)
     {
@@ -193,7 +193,6 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         throw 1;
     }
 
-    cout << "Qui ci sono" << endl;
 
     // Deserialize the message to read clearly the message
     if (!pkt.deserialize_message(receive_buffer))
@@ -203,7 +202,7 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     }
 
     // Derive symmetric key and hmac key, hash them and take a portion of the hash for the 128 bit key
-    symmetric_key_no_hashed = derive_shared_secret(hello_pkt.symmetric_key_param, pkt.symmetric_key_param_server_clear);
+    symmetric_key_no_hashed = deriveSharedSecret(hello_pkt.symmetric_key_param, pkt.symmetric_key_param_server_clear);
 
     if (!symmetric_key_no_hashed)
     {
@@ -211,20 +210,20 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         throw 3;
     }
 
-    ret = hash_symmetric_key(symmetric_key, symmetric_key_no_hashed);
+    ret = hashKey(symmetric_key, symmetric_key_no_hashed);
     if (ret != 0)
     {
         free(receive_buffer);
         throw 4;
     }
 
-    hmac_key_no_hashed = derive_shared_secret(hello_pkt.hmac_key_param, pkt.hmac_key_param_server_clear);
+    hmac_key_no_hashed = deriveSharedSecret(hello_pkt.hmac_key_param, pkt.hmac_key_param_server_clear);
     if (!hmac_key_no_hashed)
     {
         throw 3;
     }
 
-    ret = hash_hmac_key(hmac_key, hmac_key_no_hashed);
+    ret = hashKey(hmac_key, hmac_key_no_hashed);
     if (ret != 0)
     {
         free(receive_buffer);
@@ -253,7 +252,7 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     memcpy(iv, pkt.iv_cbc, iv_size);
     free(pkt.iv_cbc);
 
-    ret = cbc_decrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
+    ret = cbcDecrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
 
     if (ret != 0)
     {
@@ -306,7 +305,7 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
     memcpy(signed_text, to_copy, signed_text_len);
 
     // Verify the signature
-    ret = verify_signature(server_pubk, plaintext, plainlen, signed_text, signed_text_len);
+    ret = verifySignature(server_pubk, plaintext, plainlen, signed_text, signed_text_len);
     if (ret != 0)
     {
         free(receive_buffer);
@@ -354,7 +353,7 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     memcpy(part_to_encrypt, to_copy, pte_len);
 
     // Sign the document
-    signature = sign_message(private_key, part_to_encrypt, pte_len, signature_len);
+    signature = signMessage(private_key, part_to_encrypt, pte_len, signature_len);
     if (signature == nullptr)
     {
         free(to_copy);
@@ -362,10 +361,10 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
         throw 3;
     }
 
-    iv = generate_iv(); // THROWS 0
+    iv = generateIV(); // THROWS 0
 
     // Encrypt
-    ret = cbc_encrypt(signature, signature_len, ciphertext, cipherlen, symmetric_key, iv);
+    ret = cbcEncrypt(signature, signature_len, ciphertext, cipherlen, symmetric_key, iv);
     if (ret != 0)
     {
         free(to_copy);
@@ -589,7 +588,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     unsigned char* generated_MAC;
 
     // Encryption
-    if (cbc_encrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
+    if (cbcEncrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
     {
         cerr << "[ERROR] Couldn't encrypt!" << endl;
         return false;
@@ -610,7 +609,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     memcpy(generated_MAC + IV_LENGTH + sizeof(cipherlen), (void *)ciphertext, cipherlen);
 
     // Generate the HMAC on the receiving side iv||ciphertext
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MAC_len, hmac_key, MAX_PKT_SIZE);
+    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MAC_len, hmac_key);
 
     // Initialization of the data to serialize
     pkt.ciphertext = (uint8_t *)ciphertext;
@@ -708,10 +707,10 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     memcpy(generated_MAC + IV_LENGTH + sizeof(rcvd_pkt.cipher_len), (void *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len);
 
     // Generate the HMAC to verify the correctness of the received message
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len), HMAC, MAC_len, hmac_key, MAX_PKT_SIZE);
+    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len), HMAC, MAC_len, hmac_key);
 
     // Verify HMAC
-    if (!verify_SHA256(HMAC, rcvd_pkt.HMAC))
+    if (!verifySHA256(HMAC, rcvd_pkt.HMAC))
     {
         cerr << "[ERROR] Couldn't verify HMAC, try again" << endl;
         free(generated_MAC);
@@ -722,7 +721,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     }
 
     // Decrypt the ciphertext and obtain the plaintext
-    if (cbc_decrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
+    if (cbcDecrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
     {
         cerr << "[ERROR] Couldn't encrypt!" << endl;
         free(generated_MAC);
@@ -781,7 +780,7 @@ string send_operation_packet(int operation)
     buffer = pkt.serializePacket();
     cout << "sto per inviare : " << buffer << endl;
 
-    iv = generate_iv(); // THROWS 0
+    iv = generateIV(); // THROWS 0
 
     if (!encrypt_generate_HMAC_and_send(buffer))
     {

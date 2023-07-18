@@ -13,19 +13,19 @@
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
-#include "./../utils/env.h"
-#include "./../utils/packet.h"
 #include <iostream>
 #include <iomanip>
 #include <openssl/rand.h>
 #include <sstream>
 #include <string>
 #include <chrono>
+#include "./../utils/env.h"
+#include "./../utils/packet.h"
 #include "./operations.cpp"
 
 using namespace std;
 
-string logged_user;
+string loggedUser;
 string server_privK_path = "./src/server/keys/server_privK.pem";
 string server_pubK_path = "./src/server/keys/server_pubK.pem";
 string user_key_path;
@@ -54,7 +54,7 @@ bool load_private_server_key()
     // Open the file where the key is stored
     FILE *file = fopen(server_privK_path.c_str(), "r");
     // Set the hardcoded password to open the key
-    string password = "server";
+    string password = SERVER_KEY_PWD;
     if (!file)
     {
         return false;
@@ -202,9 +202,9 @@ void receive_wave_pkt(wave_pkt &pkt)
     }
 
     // We set the current user
-    logged_user = pkt.username;
+    loggedUser = pkt.username;
     // We set the path to retrieve the pubK of the user
-    user_key_path = "./src/server/user_keys/" + logged_user + "_pubK.pem";
+    user_key_path = "./src/server/user_keys/" + loggedUser + "_pubK.pem";
 
     // check if key params are valid
     if (pkt.symmetric_key_param == nullptr || pkt.hmac_key_param == nullptr)
@@ -218,7 +218,7 @@ void receive_wave_pkt(wave_pkt &pkt)
         {
             EVP_PKEY_free(pkt.hmac_key_param);
         }
-        logged_user = "";
+        loggedUser = "";
         user_key_path = "";
         throw 4;
     }
@@ -263,7 +263,7 @@ void send_login_server_authentication(login_authentication_pkt &pkt)
     memcpy(part_to_encrypt, to_copy, pte_len);
 
     // Sign and free the private key
-    signature = sign_message(private_key, part_to_encrypt, pte_len, signature_len);
+    signature = signMessage(private_key, part_to_encrypt, pte_len, signature_len);
     if (signature == nullptr)
     {
         free(to_copy);
@@ -272,10 +272,10 @@ void send_login_server_authentication(login_authentication_pkt &pkt)
     }
 
     // Generate the IV
-    iv = generate_iv();
+    iv = generateIV();
 
     // Encrypt
-    ret = cbc_encrypt(signature, signature_len, ciphertext, cipherlen, symmetric_key, iv);
+    ret = cbcEncrypt(signature, signature_len, ciphertext, cipherlen, symmetric_key, iv);
     if (ret != 0)
     {
         free(to_copy);
@@ -368,7 +368,7 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
 
     memcpy(iv, pkt.iv_cbc, iv_size);
     //free(server_auth_pkt.iv_cbc);
-    ret = cbc_decrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
+    ret = cbcDecrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
 
     if (ret != 0)
     {
@@ -403,7 +403,6 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
     // Server serializes as the client did
     unsigned char* to_copy = (unsigned char *)pkt.serialize_part_to_encrypt(signed_text_len);
     signed_text = (unsigned char *)malloc(signed_text_len);
-    cout << "pallone" << endl;
     if (!signed_text)
     {
         free(receive_buffer);
@@ -415,7 +414,7 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
     }
     memcpy(signed_text, to_copy, signed_text_len);
     // Verify the signature
-    ret = verify_signature(client_pubk, plaintext, plainlen, signed_text, signed_text_len);
+    ret = verifySignature(client_pubk, plaintext, plainlen, signed_text, signed_text_len);
     if (ret != 0)
     {
         free(receive_buffer);
@@ -426,7 +425,6 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
         free(signed_text);
         throw 6;
     }
-    cout << "tutto a posto" << endl;
     // Frees
     free(receive_buffer);
     free(plaintext);
@@ -482,7 +480,7 @@ bool start_session()
     cout << "LOGIN SESSION OF USERNAME: " + hello_pkt.username << endl;
 
     // Generate dh keys for the server
-    server_auth_pkt.symmetric_key_param_server_clear = generate_dh_key();
+    server_auth_pkt.symmetric_key_param_server_clear = generateDhKey();
     server_auth_pkt.symmetric_key_param_server = server_auth_pkt.symmetric_key_param_server_clear; // TO ENCRYPT
 
     if (server_auth_pkt.symmetric_key_param_server == nullptr)
@@ -491,7 +489,7 @@ bool start_session()
         return false;
     }
 
-    server_auth_pkt.hmac_key_param_server_clear = generate_dh_key();
+    server_auth_pkt.hmac_key_param_server_clear = generateDhKey();
     server_auth_pkt.hmac_key_param_server = server_auth_pkt.hmac_key_param_server_clear; // TO ENCRYPT
 
     if (server_auth_pkt.hmac_key_param_server == nullptr)
@@ -505,15 +503,14 @@ bool start_session()
     server_auth_pkt.hmac_key_param_client = hello_pkt.hmac_key_param;
 
     // derive symmetric key and hmac key, hash them, take a portion of the hash for the 128 bit key
-    symmetric_key_no_hashed = derive_shared_secret(server_auth_pkt.symmetric_key_param_server, hello_pkt.symmetric_key_param);
+    symmetric_key_no_hashed = deriveSharedSecret(server_auth_pkt.symmetric_key_param_server, hello_pkt.symmetric_key_param);
 
     if (!symmetric_key_no_hashed)
     {
         cerr << "[ERROR] Couldn't derive symm key!" << endl;
         return false;
     }
-    ret = hash_symmetric_key(symmetric_key, symmetric_key_no_hashed);
-    //cout << "Symm key: " << symmetric_key << "Size of key: "<< symmetric_key_length << endl;
+    ret = hashKey(symmetric_key, symmetric_key_no_hashed);
 
     if (ret != 0)
     {
@@ -521,14 +518,14 @@ bool start_session()
         return false;
     }
 
-    hmac_key_no_hashed = derive_shared_secret(server_auth_pkt.hmac_key_param_server, hello_pkt.hmac_key_param);
+    hmac_key_no_hashed = deriveSharedSecret(server_auth_pkt.hmac_key_param_server, hello_pkt.hmac_key_param);
 
     if (!hmac_key_no_hashed)
     {
         cerr << "[ERROR] Couldn't derive hmac key!" << endl;
         return false;
     }
-    ret = hash_hmac_key(hmac_key, hmac_key_no_hashed);
+    ret = hashKey(hmac_key, hmac_key_no_hashed);
     //cout << "Hmac key: " << hmac_key << "Size of key: "<< hmac_key_length << endl;
 
     if (ret != 0)
@@ -661,7 +658,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     unsigned char *generated_MAC;
 
     // Encryption
-    if (cbc_encrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
+    if (cbcEncrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
     {
         cerr << "[ERROR] Couldn't decrypt!" << endl;
         free(ciphertext);
@@ -684,7 +681,7 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     memcpy(generated_MAC + IV_LENGTH + sizeof(cipherlen), (void *)ciphertext, cipherlen);
 
     // Generate the HMAC on the receiving side iv||ciphertext
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MAC_len, hmac_key, MAX_PKT_SIZE);
+    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MAC_len, hmac_key);
 
     // Initialization of the data to serialize
     pkt.ciphertext = (uint8_t *)ciphertext;
@@ -782,10 +779,10 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     memcpy(generated_MAC + IV_LENGTH + sizeof(rcvd_pkt.cipher_len), (void *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len);
 
     // Generate the HMAC to verify the correctness of the received message
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len), HMAC, MAC_len, hmac_key, MAX_PKT_SIZE);
+    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len), HMAC, MAC_len, hmac_key);
 
     // Verify HMAC
-    if (!verify_SHA256(HMAC, rcvd_pkt.HMAC))
+    if (!verifySHA256(HMAC, rcvd_pkt.HMAC))
     {
         cerr << "[ERROR] Couldn't verify HMAC!" << endl;
         free(generated_MAC);
@@ -796,7 +793,7 @@ unsigned char *receive_decrypt_and_verify_HMAC()
     }
 
     // Decrypt the ciphertext and obtain the plaintext
-    if (cbc_decrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
+    if (cbcDecrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
     {
         cerr << "[ERROR] Couldn't decrypt!" << endl;
         free(generated_MAC);
@@ -820,7 +817,7 @@ int handle_command()
     unsigned char *plaintxt;
     try
     {
-        client_info pkt_simple;
+        client_info clientPkt;
         string buffer;
 
         plaintxt = receive_decrypt_and_verify_HMAC();
@@ -828,35 +825,43 @@ int handle_command()
             throw 1; 
         }
 
-        if (!pkt_simple.deserializeClientInfo(plaintxt)){
+        if (!clientPkt.deserializeClientInfo(plaintxt)){
             free(plaintxt);
             throw 2;
         }
 
-        switch (pkt_simple.operationCode)
+        // check freshness with timestamp
+        uint64_t currentTimestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        // if the timestamp received is older than a minute we reject the packet
+        if(currentTimestamp - clientPkt.timestamp >= 60000){
+            free(plaintxt);
+            throw exception();
+        }
+
+        switch (clientPkt.operationCode)
         {
         case BALANCE:
         {
-            cout << "Received Balance command from " << logged_user << endl;
-            buffer = balance(pkt_simple, logged_user);
+            cout << "Received Balance command from " << loggedUser << endl;
+            buffer = balance(clientPkt, loggedUser);
             break;
         }
         case TRANSFER:
         {
-            cout << "Received Transfer command from " << logged_user << endl;
-            buffer = transfer(pkt_simple, logged_user);
+            cout << "Received Transfer command from " << loggedUser << endl;
+            buffer = transfer(clientPkt, loggedUser);
             break;
         }
         case HISTORY:
         {
-            cout << "Received History command from " << logged_user << endl;
-            buffer = history(pkt_simple, logged_user);
+            cout << "Received History command from " << loggedUser << endl;
+            buffer = history(clientPkt, loggedUser);
             break;
         }
         case LOGOUT:
         {
-            cout << "Received Logout command from " << logged_user << endl;
-            buffer = logout(pkt_simple, logged_user);
+            cout << "Received Logout command from " << loggedUser << endl;
+            buffer = logout(clientPkt, loggedUser);
             break;
         }
         default:
@@ -867,7 +872,7 @@ int handle_command()
         }
         }
 
-        iv = generate_iv(); // THROWS 0
+        iv = generateIV(); // THROWS 0
 
         // Send a response to the client
         if (!encrypt_generate_HMAC_and_send(buffer))
@@ -876,7 +881,7 @@ int handle_command()
         }
 
         // Tells the caller that the client has disconnected
-        if (pkt_simple.operationCode == LOGOUT)
+        if (clientPkt.operationCode == LOGOUT)
         {
             return 1;
         }
@@ -929,10 +934,10 @@ void ServeClient()
     if(!start_session())
         return;
 
-    cout << "SESSION KEYS HAVE BEEN ESTABLISHED CORRECTLY" << endl
+    cout << "[+]SESSION KEYS HAVE BEEN ESTABLISHED CORRECTLY" << endl
          << endl;
 
-    cout << "//-------" << logged_user << "'s session-------//" << endl;
+    cout << "[+]-------" << loggedUser << "'s session-------" << endl;
 
     while (true)
     {
@@ -946,16 +951,16 @@ void ServeClient()
         }
         else if (ret == 1)
         {
-            cout << "Connection with " << logged_user << " terminated succesfully" << endl;
+            cout << "Connection with " << loggedUser << " terminated succesfully" << endl;
             break;
         } else if (ret == 2)
         {
-            cerr << "Connection with " << logged_user << " terminated, because of client's crash!" << endl;
+            cerr << "Connection with " << loggedUser << " terminated, because of client's crash!" << endl;
             break;
         }
     }
     
-    cout << "//----End of " << logged_user << "'s session----//" << endl
+    cout << "//----End of " << loggedUser << "'s session----//" << endl
              << endl;
     
     // Frees
@@ -973,12 +978,12 @@ int main(int argc, char **argv)
         return -1;
     }
     //cout << "cifratura iniziale del file utenti" << endl;
-    //encrypt_file("./src/server/files/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
-    //encrypt_file("./src/server/files/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
-    //encrypt_file("./src/server/files/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
-    //encrypt_file("./src/server/files/bobBalance.txt.enc" , "OVERWRITE" , "6ed3509863adfbe4 200");
-    //encrypt_file("./src/server/files/aliceHistory.txt.enc" , "APPEND" , "\n");
-    //encrypt_file("./src/server/files/bobHistory.txt.enc" , "APPEND" , "\n");
+    //encryptFile("./src/server/files/users.txt.enc" , "OVERWRITE" , "bob $5$RTId3jqpirFuciRL$cSgI0./hE0Vl8rN6yUcZ7gDS9KHd6cy02Xfo14I43i4 6ed3509863adfbe4");
+    //encryptFile("./src/server/files/users.txt.enc" , "APPEND" , "\nalice $5$ei6+bfrJQCnH11rm$btjaJ5T/MWFFsT2grbQZxPG9TW52KR1isEKc8LTgDh7 57d67284e4f79fc5");
+    //encryptFile("./src/server/files/aliceBalance.txt.enc" , "OVERWRITE" , "57d67284e4f79fc5 100");
+    //encryptFile("./src/server/files/bobBalance.txt.enc" , "OVERWRITE" , "6ed3509863adfbe4 200");
+    //encryptFile("./src/server/files/aliceHistory.txt.enc" , "APPEND" , "\n");
+    //encryptFile("./src/server/files/bobHistory.txt.enc" , "APPEND" , "\n");
     //------ Setting up the server ------//
 
     // Assign the port
@@ -1043,7 +1048,7 @@ int main(int argc, char **argv)
         ServeClient();
 
         // Frees
-        logged_user = "";
+        loggedUser = "";
         user_key_path = "";
         counter = 0;
     }

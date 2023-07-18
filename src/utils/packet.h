@@ -37,14 +37,14 @@ struct wave_pkt
         void* key_buffer_hmac = nullptr;   
 
         // Serializes key to send it throught the network using BIO structure
-        key_buffer_symmetric = serialize_evp_pkey(symmetric_key_param, symmetric_key_param_len);
+        key_buffer_symmetric = serializeKey(symmetric_key_param, symmetric_key_param_len);
         if (key_buffer_symmetric == nullptr)
         {
             return nullptr;
         }
 
         // Serializes key to send it throught the network using BIO structure
-        key_buffer_hmac = serialize_evp_pkey(hmac_key_param, hmac_key_param_len);
+        key_buffer_hmac = serializeKey(hmac_key_param, hmac_key_param_len);
         if (key_buffer_hmac == nullptr)
         {
             return nullptr;
@@ -157,14 +157,14 @@ struct wave_pkt
         pointer_counter += sizeof(hmac_key_param_len);
 
         // Copy of the symmetric parameter
-        symmetric_key_param = deserialize_evp_pkey(serialized_pkt + pointer_counter, symmetric_key_param_len);
+        symmetric_key_param = deserializeKey(serialized_pkt + pointer_counter, symmetric_key_param_len);
         if (pointer_counter > numeric_limits<uint64_t>::max() - symmetric_key_param_len)
         {
             return false;
         }
         pointer_counter += symmetric_key_param_len;
         // Copy of the hmac parameter
-        hmac_key_param = deserialize_evp_pkey(serialized_pkt + pointer_counter, hmac_key_param_len);
+        hmac_key_param = deserializeKey(serialized_pkt + pointer_counter, hmac_key_param_len);
 
         if (hmac_key_param == nullptr || symmetric_key_param == nullptr)
         {
@@ -206,10 +206,10 @@ struct login_authentication_pkt
         uint8_t* serialized_pte;
 
         // Evp serializations to pass data through the network
-        void* key_buffer_symmetric_server = serialize_evp_pkey(symmetric_key_param_server, symmetric_key_param_len_server);
-        void* key_buffer_hmac_server = serialize_evp_pkey(hmac_key_param_server, hmac_key_param_len_server);
-        void* key_buffer_symmetric_client = serialize_evp_pkey(symmetric_key_param_client, symmetric_key_param_len_client);
-        void* key_buffer_hmac_client = serialize_evp_pkey(hmac_key_param_client, hmac_key_param_len_client);
+        void* key_buffer_symmetric_server = serializeKey(symmetric_key_param_server, symmetric_key_param_len_server);
+        void* key_buffer_hmac_server = serializeKey(hmac_key_param_server, hmac_key_param_len_server);
+        void* key_buffer_symmetric_client = serializeKey(symmetric_key_param_client, symmetric_key_param_len_client);
+        void* key_buffer_hmac_client = serializeKey(hmac_key_param_client, hmac_key_param_len_client);
 
         // Total length
         len = sizeof(symmetric_key_param_len_server) + sizeof(hmac_key_param_len_server) + sizeof(symmetric_key_param_len_client) +
@@ -270,11 +270,11 @@ struct login_authentication_pkt
         }
 
         // Symm_key
-        key_buffer_symmetric_server_clear = serialize_evp_pkey(symmetric_key_param_server_clear, symmetric_key_param_server_clear_len);
+        key_buffer_symmetric_server_clear = serializeKey(symmetric_key_param_server_clear, symmetric_key_param_server_clear_len);
         uint32_t certified_symmetric_key_server_clear_len = htonl(symmetric_key_param_server_clear_len);
 
         // Hmac_key
-        key_buffer_hmac_server_clear = serialize_evp_pkey(hmac_key_param_server_clear, hmac_key_param_server_clear_len);
+        key_buffer_hmac_server_clear = serializeKey(hmac_key_param_server_clear, hmac_key_param_server_clear_len);
         uint32_t certified_hmac_key_server_clear_len = htonl(hmac_key_param_server_clear_len);
 
         uint32_t certified_encrypted_signing_len = htonl(encrypted_signing_len);
@@ -390,7 +390,7 @@ struct login_authentication_pkt
         }
         pointer_counter += IV_LENGTH;
 
-        symmetric_key_param_server_clear = deserialize_evp_pkey(serialized_pkt_received + pointer_counter, symmetric_key_param_server_clear_len);
+        symmetric_key_param_server_clear = deserializeKey(serialized_pkt_received + pointer_counter, symmetric_key_param_server_clear_len);
         if (pointer_counter > numeric_limits<uint64_t>::max() - symmetric_key_param_server_clear_len)
         {
             return false;
@@ -402,7 +402,7 @@ struct login_authentication_pkt
             return false;
         }
 
-        hmac_key_param_server_clear = deserialize_evp_pkey(serialized_pkt_received + pointer_counter, hmac_key_param_server_clear_len);
+        hmac_key_param_server_clear = deserializeKey(serialized_pkt_received + pointer_counter, hmac_key_param_server_clear_len);
         if (pointer_counter > numeric_limits<uint64_t>::max() - hmac_key_param_server_clear_len)
         {
             return false;

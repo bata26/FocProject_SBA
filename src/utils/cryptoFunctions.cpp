@@ -13,110 +13,110 @@
 
 using namespace std;
 
-unsigned char *decrypt_file(string fileName)
+unsigned char *decryptFile(string fileName)
 {
-    int ret; // Used to return values
-    string password = "server";
-    string prvkey_file_name = "./src/server/keys/server_privK.pem";
+    int ret; 
+    string password = SERVER_KEY_PWD;
+    string prvkeyFileName = "./src/server/keys/server_privK.pem";
 
-    // Load my private key
-    FILE *prvkey_file = fopen(prvkey_file_name.c_str(), "r");
-    if (!prvkey_file)
+    // Load private key
+    FILE *prvkeyFile = fopen(prvkeyFileName.c_str(), "r");
+    if (!prvkeyFile)
     {
-        cerr << "[ERROR] cannot open file '" << prvkey_file_name << "' (missing?)\n";
+        cerr << "[ERROR] cannot open file '" << prvkeyFileName << "' (missing?)\n";
         exit(1);
     }
-    EVP_PKEY *prvkey = PEM_read_PrivateKey(prvkey_file, NULL, NULL, (void *)password.c_str());
-    fclose(prvkey_file);
+    EVP_PKEY *prvkey = PEM_read_PrivateKey(prvkeyFile, NULL, NULL, (void *)password.c_str());
+    fclose(prvkeyFile);
     if (!prvkey)
     {
         cerr << "[ERROR] PEM_read_PrivateKey returned NULL\n";
         exit(1);
     }
 
-    // Open the file to decrypt
-    FILE *cphr_file_to_decrypt = fopen(fileName.c_str(), "rb");
-    if (!cphr_file_to_decrypt)
+    // Open file to decrypt
+    FILE *cphrFileToDecrypt = fopen(fileName.c_str(), "rb");
+    if (!cphrFileToDecrypt)
     {
-        cerr << "[ERROR] cannot open file '" << fileName << "' (file does not exist?)\n";
+        cerr << "[ERROR] cannot open file '" << fileName << "'"<< endl;
         exit(1);
     }
 
     // Get the file size
-    ret = fseek(cphr_file_to_decrypt, 0, SEEK_END);
+    ret = fseek(cphrFileToDecrypt, 0, SEEK_END);
     if (ret != 0)
     {
-        cerr << "[ERROR] cannot seek_end in  '" << fileName << "' (file corrupted?)\n";
+        cerr << "[ERROR] cannot seek_end in  '" << fileName << "'"<< endl;
         exit(1);
     }
-    long int cphr_file_size = ftell(cphr_file_to_decrypt);
-    ret = fseek(cphr_file_to_decrypt, 0, SEEK_SET);
+    long int cphrFileSize = ftell(cphrFileToDecrypt);
+    ret = fseek(cphrFileToDecrypt, 0, SEEK_SET);
     if (ret != 0)
     {
-        cerr << "[ERROR] cannot seek_set in  '" << fileName << "' (file corrupted?)\n";
+        cerr << "[ERROR] cannot seek_set in  '" << fileName << "'"<< endl;
         exit(1);
     }
     // Vars
-    const EVP_CIPHER *cipher_to_decrypt = EVP_aes_128_cbc();
-    int encrypted_key_len_to_decrypt = EVP_PKEY_size(prvkey);
-    int iv_len_to_decrypt = EVP_CIPHER_iv_length(cipher_to_decrypt);
+    const EVP_CIPHER *cipherToDecrypt = EVP_aes_128_cbc();
+    int encryptedKeyLen = EVP_PKEY_size(prvkey);
+    int ivLen = EVP_CIPHER_iv_length(cipherToDecrypt);
 
     // Check for possible integer overflow in (encrypted_key_len + iv_len)
-    if (encrypted_key_len_to_decrypt > INT_MAX - iv_len_to_decrypt)
+    if (encryptedKeyLen > INT_MAX - ivLen)
     {
         cerr << "[ERROR] integer overflow (encrypted key too big?)\n";
         exit(1);
     }
     // Check for correct format of the encrypted file
-    if (cphr_file_size < encrypted_key_len_to_decrypt + iv_len_to_decrypt)
+    if (cphrFileSize < encryptedKeyLen + ivLen)
     {
         cerr << "[ERROR] encrypted file with wrong format\n";
         exit(1);
     }
 
     // Allocate buffers for encrypted key, IV, ciphertext, and plaintext:
-    unsigned char *encrypted_key_to_decrypt = (unsigned char *)malloc(encrypted_key_len_to_decrypt);
-    unsigned char *iv_to_decrypt = (unsigned char *)malloc(iv_len_to_decrypt);
-    int cphr_size_to_decrypt = cphr_file_size - encrypted_key_len_to_decrypt - iv_len_to_decrypt;
-    unsigned char *cphr_buf_to_decrypt = (unsigned char *)malloc(cphr_size_to_decrypt);
-    unsigned char *clear_buf = (unsigned char *)malloc(cphr_size_to_decrypt);
-    if (!encrypted_key_to_decrypt || !iv_to_decrypt || !cphr_buf_to_decrypt || !clear_buf)
+    unsigned char *encryptedKey = (unsigned char *)malloc(encryptedKeyLen);
+    unsigned char *encryptedIV = (unsigned char *)malloc(ivLen);
+    int cphrLen = cphrFileSize - encryptedKeyLen - ivLen;
+    unsigned char *cphrBuffer = (unsigned char *)malloc(cphrLen);
+    unsigned char *clearBuffer = (unsigned char *)malloc(cphrLen);
+    if (!encryptedKey || !encryptedIV || !cphrBuffer || !clearBuffer)
     {
         cerr << "[ERROR] malloc returned NULL (file too big?)\n";
         exit(1);
     }
 
     // Read the encrypted key, the IV, and the ciphertext from file:
-    ret = fread(encrypted_key_to_decrypt, 1, encrypted_key_len_to_decrypt, cphr_file_to_decrypt);
-    if (ret < encrypted_key_len_to_decrypt)
+    ret = fread(encryptedKey, 1, encryptedKeyLen, cphrFileToDecrypt);
+    if (ret < encryptedKeyLen)
     {
         cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
-    ret = fread(iv_to_decrypt, 1, iv_len_to_decrypt, cphr_file_to_decrypt);
-    if (ret < iv_len_to_decrypt)
+    ret = fread(encryptedIV, 1, ivLen, cphrFileToDecrypt);
+    if (ret < ivLen)
     {
         cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
-    ret = fread(cphr_buf_to_decrypt, 1, cphr_size_to_decrypt, cphr_file_to_decrypt);
-    if (ret < cphr_size_to_decrypt)
+    ret = fread(cphrBuffer, 1, cphrLen, cphrFileToDecrypt);
+    if (ret < cphrLen)
     {
         cerr << "[ERROR] while reading file '" << fileName << "'\n";
         exit(1);
     }
-    fclose(cphr_file_to_decrypt);
+    fclose(cphrFileToDecrypt);
 
     // Create the envelope context:
-    EVP_CIPHER_CTX *ctx_to_decrypt = EVP_CIPHER_CTX_new();
-    if (!ctx_to_decrypt)
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx)
     {
         cerr << "[ERROR] EVP_CIPHER_CTX_new returned NULL\n";
         exit(1);
     }
 
     // Decrypt the ciphertext:
-    ret = EVP_OpenInit(ctx_to_decrypt, cipher_to_decrypt, encrypted_key_to_decrypt, encrypted_key_len_to_decrypt, iv_to_decrypt, prvkey);
+    ret = EVP_OpenInit(ctx, cipherToDecrypt, encryptedKey, encryptedKeyLen, encryptedIV, prvkey);
     if (ret == 0)
     {
         cerr << "[ERROR] EVP_OpenInit returned " << ret << "\n";
@@ -124,14 +124,14 @@ unsigned char *decrypt_file(string fileName)
     }
     int nd = 0;    // bytes decrypted at each chunk
     int ndtot = 0; // total decrypted bytes
-    ret = EVP_OpenUpdate(ctx_to_decrypt, clear_buf, &nd, cphr_buf_to_decrypt, cphr_size_to_decrypt);
+    ret = EVP_OpenUpdate(ctx, clearBuffer, &nd, cphrBuffer, cphrLen);
     if (ret == 0)
     {
         cerr << "[ERROR] EVP_OpenUpdate returned " << ret << "\n";
         exit(1);
     }
     ndtot += nd;
-    ret = EVP_OpenFinal(ctx_to_decrypt, clear_buf + ndtot, &nd);
+    ret = EVP_OpenFinal(ctx, clearBuffer + ndtot, &nd);
     if (ret == 0)
     {
         cerr << "[ERROR] EVP_OpenFinal returned " << ret << " (corrupted file?)\n";
@@ -141,50 +141,52 @@ unsigned char *decrypt_file(string fileName)
     int clear_size = ndtot;
     string terminator = "";
     unsigned char *result = (unsigned char *)malloc(clear_size + 1);
-    memcpy(result, clear_buf, clear_size);
+    memcpy(result, clearBuffer, clear_size);
     memcpy(result + clear_size, (unsigned char *)terminator.c_str(), 1);
     // Frees
-    EVP_CIPHER_CTX_free(ctx_to_decrypt);
+    EVP_CIPHER_CTX_free(ctx);
     EVP_PKEY_free(prvkey);
-    free(encrypted_key_to_decrypt);
-    free(iv_to_decrypt);
-    free(clear_buf);
+    free(encryptedKey);
+    free(encryptedIV);
+    free(clearBuffer);
     return result;
 }
 
-void encrypt_file(string fileName, string mode, string text)
+void encryptFile(string fileName, string mode, string text)
 {
-    int ret; // Used to return values
-    string pubkey_file_name = "./src/server/keys/server_pubK.pem";
-    unsigned char *text_to_encrypt;
-    int text_to_encrypt_length;
-    unsigned char *text_to_insert = (unsigned char *)text.c_str();
-    int text_to_insert_length = strlen((const char *)text_to_insert);
+    int ret; 
+    string pubkeyFileName = "./src/server/keys/server_pubK.pem";
+
+    unsigned char *textToEncrypt;
+    int textToEncryptLen;
+    
+    unsigned char *textToInsert = (unsigned char *)text.c_str();
+    int textToInsertLen = strlen((const char *)textToInsert);
 
     if (mode.compare("OVERWRITE") == 0)
     {
-        text_to_encrypt_length = text_to_insert_length;
-        text_to_encrypt = (unsigned char *)malloc(text_to_encrypt_length);
-        memcpy(text_to_encrypt, text_to_insert, text_to_encrypt_length);
+        textToEncryptLen = textToInsertLen;
+        textToEncrypt = (unsigned char *)malloc(textToEncryptLen);
+        memcpy(textToEncrypt, textToInsert, textToEncryptLen);
     }
     else if (mode.compare("APPEND") == 0)
     {
-        unsigned char *text_decrypted = decrypt_file(fileName);
+        unsigned char *text_decrypted = decryptFile(fileName);
         int text_decrypted_length = strlen((const char *)text_decrypted);
-        text_to_encrypt_length = text_decrypted_length + text_to_insert_length;
-        text_to_encrypt = (unsigned char *)malloc(text_to_encrypt_length);
-        memcpy(text_to_encrypt, text_decrypted, text_decrypted_length);
-        memcpy(text_to_encrypt + text_decrypted_length, text_to_insert, text_to_insert_length);
+        textToEncryptLen = text_decrypted_length + textToInsertLen;
+        textToEncrypt = (unsigned char *)malloc(textToEncryptLen);
+        memcpy(textToEncrypt, text_decrypted, text_decrypted_length);
+        memcpy(textToEncrypt + text_decrypted_length, textToInsert, textToInsertLen);
     }
 
-    FILE *pubkey_file = fopen(pubkey_file_name.c_str(), "r");
-    if (!pubkey_file)
+    FILE *pubkeyFile = fopen(pubkeyFileName.c_str(), "r");
+    if (!pubkeyFile)
     {
-        cerr << "[ERROR] cannot open file '" << pubkey_file_name << "' (missing?)\n";
+        cerr << "[ERROR] cannot open file '" << pubkeyFileName << "' (missing?)\n";
         exit(1);
     }
-    EVP_PKEY *pubkey = PEM_read_PUBKEY(pubkey_file, NULL, NULL, NULL);
-    fclose(pubkey_file);
+    EVP_PKEY *pubkey = PEM_read_PUBKEY(pubkeyFile, NULL, NULL, NULL);
+    fclose(pubkeyFile);
     if (!pubkey)
     {
         cerr << "[ERROR] PEM_read_PUBKEY returned NULL\n";
@@ -193,9 +195,9 @@ void encrypt_file(string fileName, string mode, string text)
 
     // Vars
     const EVP_CIPHER *cipher = EVP_aes_128_cbc();
-    int encrypted_key_len = EVP_PKEY_size(pubkey);
-    int iv_len = EVP_CIPHER_iv_length(cipher);
-    int block_size = EVP_CIPHER_block_size(cipher);
+    int encryptedKeyLen = EVP_PKEY_size(pubkey);
+    int ivLen = EVP_CIPHER_iv_length(cipher);
+    int blockSize = EVP_CIPHER_block_size(cipher);
 
     // Create the envelope context
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
@@ -206,32 +208,32 @@ void encrypt_file(string fileName, string mode, string text)
     }
 
     // Allocate buffers for encrypted key and IV:
-    unsigned char *encrypted_key = (unsigned char *)malloc(encrypted_key_len);
-    unsigned char *iv = (unsigned char *)malloc(iv_len);
-    if (!encrypted_key || !iv)
+    unsigned char *encryptedKey = (unsigned char *)malloc(encryptedKeyLen);
+    unsigned char *iv = (unsigned char *)malloc(ivLen);
+    if (!encryptedKey || !iv)
     {
         cerr << "[ERROR] malloc returned NULL (encrypted key too big?)\n";
         exit(1);
     }
 
     // Check for possible integer overflow in (clear_size + block_size)
-    if (text_to_encrypt_length > INT_MAX - block_size)
+    if (textToEncryptLen > INT_MAX - blockSize)
     {
         cerr << "[ERROR] integer overflow (file too big?)\n";
         exit(1);
     }
 
     // Allocate a buffer for the ciphertext:
-    int enc_buffer_size = text_to_encrypt_length + block_size;
-    unsigned char *cphr_buf = (unsigned char *)malloc(enc_buffer_size);
-    if (!cphr_buf)
+    int chipherBufferSize = textToEncryptLen + blockSize;
+    unsigned char *cipherBuffer = (unsigned char *)malloc(chipherBufferSize);
+    if (!cipherBuffer)
     {
         cerr << "[ERROR] malloc returned NULL (file too big?)\n";
         exit(1);
     }
 
     // Encrypt the plaintext:
-    ret = EVP_SealInit(ctx, cipher, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1);
+    ret = EVP_SealInit(ctx, cipher, &encryptedKey, &encryptedKeyLen, iv, &pubkey, 1);
     if (ret <= 0)
     {
         cerr << "[ERROR] EVP_SealInit returned " << ret << "\n";
@@ -239,192 +241,164 @@ void encrypt_file(string fileName, string mode, string text)
     }
     int nc = 0;    // Bytes encrypted at each chunk
     int nctot = 0; // Total encrypted bytes
-    ret = EVP_SealUpdate(ctx, cphr_buf, &nc, text_to_encrypt, text_to_encrypt_length);
+    ret = EVP_SealUpdate(ctx, cipherBuffer, &nc, textToEncrypt, textToEncryptLen);
     if (ret == 0)
     {
         cerr << "[ERROR] EVP_SealUpdate returned " << ret << "\n";
         exit(1);
     }
     nctot += nc;
-    ret = EVP_SealFinal(ctx, cphr_buf + nctot, &nc);
+    ret = EVP_SealFinal(ctx, cipherBuffer + nctot, &nc);
     if (ret == 0)
     {
         cerr << "[ERROR] EVP_SealFinal returned " << ret << "\n";
         exit(1);
     }
     nctot += nc;
-    int cphr_size = nctot;
+    int cipherSize = nctot;
 
     // Write the encrypted key, the IV, and the ciphertext into a '.enc' file:
-    FILE *cphr_file = fopen(fileName.c_str(), "wb");
-    if (!cphr_file)
+    FILE *cipherFile = fopen(fileName.c_str(), "wb");
+    if (!cipherFile)
     {
         cerr << "[ERROR] cannot open file '" << fileName << "' (no permissions?)\n";
         exit(1);
     }
-    ret = fwrite(encrypted_key, 1, encrypted_key_len, cphr_file);
-    if (ret < encrypted_key_len)
+    ret = fwrite(encryptedKey, 1, encryptedKeyLen, cipherFile);
+    if (ret < encryptedKeyLen)
     {
         cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
-    ret = fwrite(iv, 1, EVP_CIPHER_iv_length(cipher), cphr_file);
+    ret = fwrite(iv, 1, EVP_CIPHER_iv_length(cipher), cipherFile);
     if (ret < EVP_CIPHER_iv_length(cipher))
     {
         cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
-    ret = fwrite(cphr_buf, 1, cphr_size, cphr_file);
-    if (ret < cphr_size)
+    ret = fwrite(cipherBuffer, 1, cipherSize, cipherFile);
+    if (ret < cipherSize)
     {
         cerr << "[ERROR] Couldn't write on file '" << fileName << "'\n";
         exit(1);
     }
-    fclose(cphr_file);
+    fclose(cipherFile);
 
     // Delete the plaintext from memory:
-    memset(text_to_encrypt, 0, text_to_encrypt_length);
+    memset(textToEncrypt, 0, textToEncryptLen);
 
     // Frees
     EVP_CIPHER_CTX_free(ctx);
-    free(text_to_encrypt);
-    free(encrypted_key);
+    free(textToEncrypt);
+    free(encryptedKey);
     free(iv);
-    free(cphr_buf);
+    free(cipherBuffer);
     
 }
 
-EVP_PKEY *generate_dh_key()
+EVP_PKEY *generateDhKey()
 {
-    EVP_PKEY *dh_params = nullptr;
-    EVP_PKEY_CTX *dh_gen_ctx = nullptr;
-    EVP_PKEY *dh_key = nullptr;
+    EVP_PKEY *dhParams = nullptr;
+    EVP_PKEY_CTX *dhCtx = nullptr;
+    EVP_PKEY *dhKey = nullptr;
 
     int ret;
 
     try
     {
         // Allocate p and g
-        dh_params = EVP_PKEY_new();
-        if (!dh_params)
+        dhParams = EVP_PKEY_new();
+        if (!dhParams)
         {
+            cerr << "[ERROR] Couldn't generate new dh params!" << endl;
             throw 0;
         }
 
         // Set default dh parameters for p & g
-        DH *default_params = DH_get_2048_224();
-        ret = EVP_PKEY_set1_DH(dh_params, default_params);
+        DH *defaultParams = DH_get_2048_224();
+        ret = EVP_PKEY_set1_DH(dhParams, defaultParams);
 
         // Delete p & g
-        DH_free(default_params);
+        DH_free(defaultParams);
 
         if (ret != 1)
         {
-            EVP_PKEY_free(dh_params);
-            throw 1;
+            cerr << "[ERROR] Couldn't load default params!" << endl;
+            throw 0;
         }
 
         // a or b
-        dh_gen_ctx = EVP_PKEY_CTX_new(dh_params, nullptr);
-        if (!dh_gen_ctx)
-        {
-            EVP_PKEY_free(dh_params);
-            EVP_PKEY_CTX_free(dh_gen_ctx);
-            throw 2;
-        }
-
-        ret = EVP_PKEY_keygen_init(dh_gen_ctx);
-        if (ret != 1)
-        {
-            EVP_PKEY_free(dh_params);
-            EVP_PKEY_CTX_free(dh_gen_ctx);
-            throw 3;
-        }
-
-        ret = EVP_PKEY_keygen(dh_gen_ctx, &dh_key);
-        if (ret != 1)
-        {
-            EVP_PKEY_free(dh_params);
-            EVP_PKEY_CTX_free(dh_gen_ctx);
-            throw 4;
-        }
-    }
-    catch (int error_code)
-    {
-        switch (error_code)
-        {
-        case 0:
-        {
-            cerr << "[ERROR] Couldn't generate new dh params!" << endl;
-            break;
-        }
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't load default params!" << endl;
-            break;
-        }
-        case 2:
+        dhCtx = EVP_PKEY_CTX_new(dhParams, nullptr);
+        if (!dhCtx)
         {
             cerr << "[ERROR] Couldn't load define dh context!" << endl;
-            break;
+            throw 1;
         }
-        case 3:
+
+        ret = EVP_PKEY_keygen_init(dhCtx);
+        if (ret != 1)
         {
             cerr << "[ERROR] Couldn't dh keygen init!" << endl;
-            break;
+            throw 1;
         }
-        case 4:
+
+        ret = EVP_PKEY_keygen(dhCtx, &dhKey);
+        if (ret != 1)
         {
             cerr << "[ERROR] Couldn't dh keygen!" << endl;
-            break;
+            throw 1;
         }
-        }
+    }
+    catch (int errorCode)
+    {
+        EVP_PKEY_free(dhParams);
+        if(errorCode == 1) EVP_PKEY_CTX_free(dhCtx);;
         return nullptr;
     }
 
-    EVP_PKEY_CTX_free(dh_gen_ctx);
-    EVP_PKEY_free(dh_params);
+    EVP_PKEY_CTX_free(dhCtx);
+    EVP_PKEY_free(dhParams);
 
-    return dh_key;
+    return dhKey;
 }
 
 // Derive shared symm key
-unsigned char *derive_shared_secret(EVP_PKEY *this_key, EVP_PKEY *other_key)
+unsigned char *deriveSharedSecret(EVP_PKEY *firstKey, EVP_PKEY *secondKey)
 {
 
     int ret; // Used to return values
 
     // Create a new context for deriving DH key
-    EVP_PKEY_CTX *key_ctx = EVP_PKEY_CTX_new(this_key, nullptr);
-    if (!key_ctx)
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(firstKey, nullptr);
+    if (!ctx)
     {
         cerr << "[ERROR] Couldn't load define dh context of the current host!" << endl;
         return nullptr;
     }
 
-    unsigned char *shared_secret = nullptr;
-    size_t secret_length = 0;
+    unsigned char *sharedSecret = nullptr;
+    size_t secretLength = 0;
 
     // Derive the shared secret between the two hosts
     try
     {
-        ret = EVP_PKEY_derive_init(key_ctx);
+        ret = EVP_PKEY_derive_init(ctx);
         if (ret != 1)
         {
             throw 0;
         }
-        ret = EVP_PKEY_derive_set_peer(key_ctx, other_key);
+        ret = EVP_PKEY_derive_set_peer(ctx, secondKey);
         if (ret != 1)
         {
             throw 0;
         }
-        ret = EVP_PKEY_derive(key_ctx, nullptr, &secret_length);
+        ret = EVP_PKEY_derive(ctx, nullptr, &secretLength);
         if (ret != 1)
         {
             throw 0;
         }
-        shared_secret = (unsigned char *)malloc(secret_length);
-        if (!shared_secret)
+        sharedSecret = (unsigned char *)malloc(secretLength);
+        if (!sharedSecret)
         {
             throw 1;
         }
@@ -439,23 +413,23 @@ unsigned char *derive_shared_secret(EVP_PKEY *this_key, EVP_PKEY *other_key)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
         }
-        EVP_PKEY_CTX_free(key_ctx);
+        EVP_PKEY_CTX_free(ctx);
         return nullptr;
     }
 
-    ret = EVP_PKEY_derive(key_ctx, shared_secret, &secret_length);
-    EVP_PKEY_CTX_free(key_ctx);
+    ret = EVP_PKEY_derive(ctx, sharedSecret, &secretLength);
+    EVP_PKEY_CTX_free(ctx);
     if (ret != 1)
     {
-        memset(shared_secret, 0, secret_length);
-        free(shared_secret);
+        memset(sharedSecret, 0, secretLength);
+        free(sharedSecret);
         return nullptr;
     }
-    return shared_secret;
+    return sharedSecret;
 }
 
 // Serialize key EVP_PKEY
-void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
+void *serializeKey(EVP_PKEY *key, uint32_t &keyLen)
 {
     int ret;
     long ret_long;
@@ -468,6 +442,7 @@ void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
         bio = BIO_new(BIO_s_mem());
         if (!bio)
         {
+            cerr << "[ERROR] Couldn't BIO_new!" << endl;
             throw 0;
         }
 
@@ -476,7 +451,8 @@ void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
         if (ret != 1)
         {
             BIO_free(bio);
-            throw 1;
+            cerr << "[ERROR] Couldn't PEM_write_bio_PUBKEY with error: " << ret << endl;
+            throw 0;
         }
 
         // Set of the pointer key_buffer to the buffer of the memory bio and return its size
@@ -484,57 +460,34 @@ void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
         if (ret_long <= 0)
         {
             BIO_free(bio);
-            throw 2;
+            cerr << "[ERROR] Couldn't BIO_get_mem_data with error: " << ret_long << endl;
+            throw 0;
         }
-        key_len = (uint32_t)ret_long;
+        keyLen = (uint32_t)ret_long;
 
         // Allocate memory for the serialized key
-        key_buffer = malloc(key_len);
+        key_buffer = malloc(keyLen);
         if (!key_buffer)
         {
             BIO_free(bio);
-            throw 3;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw 0;
         }
 
         // Read data from bio and extract serialized key
-        ret = BIO_read(bio, key_buffer, key_len);
+        ret = BIO_read(bio, key_buffer, keyLen);
         if (ret < 1)
         {
             BIO_free(bio);
             free(key_buffer);
-            throw 4;
+            cerr << "[ERROR] Couldn't BIO_read with error: " << ret << endl;
+            throw 1;
         }
     }
-    catch (int error_code)
+    catch (int errorCode)
     {
-        switch (error_code)
-        {
-        case 0:
-        {
-            cerr << "[ERROR] Couldn't BIO_new!" << endl;
-            break;
-        }
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't PEM_write_bio_PUBKEY with error: " << ret << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] Couldn't BIO_get_mem_data with error: " << ret_long << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't malloc!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't BIO_read with error: " << ret << endl;
-            break;
-        }
-        }
+        BIO_free(bio);
+        if(errorCode == 1) free(key_buffer);
         return nullptr;
     }
 
@@ -545,7 +498,7 @@ void *serialize_evp_pkey(EVP_PKEY *key, uint32_t &key_len)
 }
 
 // Deserialize key EVP_PKEY
-EVP_PKEY *deserialize_evp_pkey(const void *_key_buffer, const uint32_t _key_length)
+EVP_PKEY *deserializeKey(const void *keyBuffer, const uint32_t keyLen)
 {
     int ret;
     BIO *bio;
@@ -557,14 +510,15 @@ EVP_PKEY *deserialize_evp_pkey(const void *_key_buffer, const uint32_t _key_leng
         bio = BIO_new(BIO_s_mem());
         if (!bio)
         {
+            cerr << "[ERROR] Couldn't BIO_new!" << endl;
             throw 0;
         }
 
         // Write serialized the key from the buffer in bio
-        ret = BIO_write(bio, _key_buffer, _key_length);
+        ret = BIO_write(bio, keyBuffer, keyLen);
         if (ret <= 0)
         {
-            BIO_free(bio);
+            cerr << "[ERROR] Couldn't BIO_write with error: " << ret << endl;
             throw 1;
         }
 
@@ -572,30 +526,13 @@ EVP_PKEY *deserialize_evp_pkey(const void *_key_buffer, const uint32_t _key_leng
         key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
         if (!key)
         {
-            BIO_free(bio);
-            throw 2;
+            cerr << "[ERROR] Couldn't PEM_read_bio_PUBKEY!" << endl;
+            throw 1;
         }
     }
-    catch (int error_code)
+    catch (int errorCode)
     {
-        switch (error_code)
-        {
-        case 0:
-        {
-            cerr << "[ERROR] Couldn't BIO_new!" << endl;
-            break;
-        }
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't BIO_write with error: " << ret << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] Couldn't PEM_read_bio_PUBKEY!" << endl;
-            break;
-        }
-        }
+        if(errorCode == 1) BIO_free(bio);;
         return nullptr;
     }
 
@@ -606,13 +543,13 @@ EVP_PKEY *deserialize_evp_pkey(const void *_key_buffer, const uint32_t _key_leng
 }
 
 // Sign a message using private key prvkey
-unsigned char *sign_message(EVP_PKEY *prvkey, const unsigned char *msg, const size_t msg_len, unsigned int &signature_len)
+unsigned char *signMessage(EVP_PKEY *prvKey, const unsigned char *msg, const size_t msgLen, unsigned int &signatureLen)
 {
     int ret;
     EVP_MD_CTX *ctx = nullptr;
     unsigned char *signature = nullptr;
 
-    if (!prvkey)
+    if (!prvKey)
     {
         return nullptr;
     }
@@ -622,87 +559,64 @@ unsigned char *sign_message(EVP_PKEY *prvkey, const unsigned char *msg, const si
         ctx = EVP_MD_CTX_new();
         if (!ctx)
         {
-            throw 1;
+            cerr << "[ERROR] Couldn't create new context for signature!" << endl;
+            throw 0;
         }
 
         ret = EVP_SignInit(ctx, EVP_sha256());
         if (ret != 1)
         {
-            EVP_MD_CTX_free(ctx);
-            throw 2;
-        }
-
-        ret = EVP_SignUpdate(ctx, msg, msg_len);
-        if (ret != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            throw 3;
-        }
-
-        signature_len = EVP_PKEY_size(prvkey);
-        signature = (unsigned char *)malloc(signature_len);
-        if (!signature)
-        {
-            EVP_MD_CTX_free(ctx);
-            throw 4;
-        }
-
-        ret = EVP_SignFinal(ctx, signature, &signature_len, prvkey);
-        if (ret != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            free(signature);
-            throw 5;
-        }
-    }
-    catch (int error_code)
-    {
-        switch (error_code)
-        {
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't create new context for signature!" << endl;
-            break;
-        }
-        case 2:
-        {
             cerr << "[ERROR] Couldn't sign init!" << endl;
-            break;
+            throw 1;
         }
-        case 3:
+
+        ret = EVP_SignUpdate(ctx, msg, msgLen);
+        if (ret != 1)
         {
             cerr << "[ERROR] Couldn't sign update!" << endl;
-            break;
+            throw 1;
         }
-        case 4:
+
+        signatureLen = EVP_PKEY_size(prvKey);
+        signature = (unsigned char *)malloc(signatureLen);
+        if (!signature)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
-            break;
+            throw 1;
         }
-        case 5:
+
+        ret = EVP_SignFinal(ctx, signature, &signatureLen, prvKey);
+        if (ret != 1)
         {
             cerr << "[ERROR] Couldn't sign final!" << endl;
-            break;
+            throw 2;
         }
+    }
+    catch (int errorCode)
+    {
+        // errorCode = 1
+        if(errorCode > 0){
+            EVP_MD_CTX_free(ctx);
+            if(errorCode == 2) free(signature);
         }
         return nullptr;
     }
 
     // Frees
     EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(prvkey);
+    EVP_PKEY_free(prvKey);
 
     return signature;
 }
 
 // Verify signature with pubkey
-int verify_signature(EVP_PKEY *pubkey, const unsigned char *signature, const size_t signature_len, const unsigned char *cleartext, const size_t cleartext_len)
+int verifySignature(EVP_PKEY *pubKey, const unsigned char *signature, const size_t signatureLen, const unsigned char *cleartext, const size_t cleartextLen)
 {
     EVP_MD_CTX *ctx = nullptr;
 
     int ret;
 
-    if (!pubkey)
+    if (!pubKey)
     {
         return -1;
     }
@@ -713,158 +627,49 @@ int verify_signature(EVP_PKEY *pubkey, const unsigned char *signature, const siz
         ctx = EVP_MD_CTX_new();
         if (!ctx)
         {
-            throw 1;
+            cerr << "[ERROR]  Couldn't create new context for signature!" << endl;
+            throw 0;
         }
 
         ret = EVP_VerifyInit(ctx, EVP_sha256());
         if (ret != 1)
         {
-            EVP_MD_CTX_free(ctx);
-            throw 2;
-        }
-
-        ret = EVP_VerifyUpdate(ctx, cleartext, cleartext_len);
-        if (ret != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            throw 3;
-        }
-
-        ret = EVP_VerifyFinal(ctx, signature, signature_len, pubkey);
-
-        if (ret != 1)
-        {
-            EVP_MD_CTX_free(ctx);
-            throw 4;
-        }
-    }
-    catch (int error_code)
-    {
-        switch (error_code)
-        {
-        case 1:
-        {
-            cerr << "[ERROR]  Couldn't create new context for signature!" << endl;
-            break;
-        }
-        case 2:
-        {
             cerr << "[ERROR] Couldn't verify init for signature!" << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't verify update for signature!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't verify final for signature!" << endl;
-            break;
-        }
-        }
-        return -1;
-    }
-
-    EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(pubkey);
-
-    return 0;
-}
-
-// Generate SHA-256, used to hash the shared secrets
-int generate_SHA256(unsigned char *msg, size_t msg_len, unsigned char *&digest, uint32_t &digestlen, uint32_t max_msg_size)
-{
-    int ret;
-    EVP_MD_CTX *ctx;
-
-    if (msg_len == 0 || msg_len > max_msg_size)
-    {
-        cerr << "[ERROR] Message length is not allowed!" << endl;
-        return -1;
-    }
-
-    try
-    {
-        digest = (unsigned char *)malloc(EVP_MD_size(EVP_sha256()));
-        if (!digest)
-        {
             throw 1;
         }
 
-        ctx = EVP_MD_CTX_new();
-        if (!ctx)
-        {
-            free(digest);
-            throw 2;
-        }
-
-        ret = EVP_DigestInit(ctx, EVP_sha256());
+        ret = EVP_VerifyUpdate(ctx, cleartext, cleartextLen);
         if (ret != 1)
         {
-            free(digest);
-            EVP_MD_CTX_free(ctx);
-            throw 3;
+            cerr << "[ERROR] Couldn't verify update for signature!" << endl;
+            throw 1;
         }
 
-        ret = EVP_DigestUpdate(ctx, (unsigned char *)msg, msg_len);
-        if (ret != 1)
-        {
-            free(digest);
-            EVP_MD_CTX_free(ctx);
-            throw 4;
-        }
+        ret = EVP_VerifyFinal(ctx, signature, signatureLen, pubKey);
 
-        ret = EVP_DigestFinal(ctx, digest, &digestlen);
         if (ret != 1)
         {
-            free(digest);
-            EVP_MD_CTX_free(ctx);
-            throw 5;
+            cerr << "[ERROR] Couldn't verify final for signature!" << endl;
+            throw 1;
         }
     }
-    catch (int error_code)
+    catch (int errorCode)
     {
-        switch (error_code)
-        {
-        case 1:
-        {
-            cerr << "[ERROR] Couldn't malloc!" << endl;
-            break;
-        }
-        case 2:
-        {
-            cerr << "[ERROR] Couldn't create context definition!" << endl;
-            break;
-        }
-        case 3:
-        {
-            cerr << "[ERROR] Couldn't initialize digest creation!" << endl;
-            break;
-        }
-        case 4:
-        {
-            cerr << "[ERROR] Couldn't update digest!" << endl;
-            break;
-        }
-        case 5:
-        {
-            cerr << "[ERROR] Couldn't finalize digest!" << endl;
-            break;
-        }
-        }
+       if(errorCode == 1) EVP_MD_CTX_free(ctx);
         return -1;
     }
 
     EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pubKey);
+
     return 0;
 }
 
 // Verify if 2 digest SHA-256 are the same
-bool verify_SHA256(unsigned char *digest, unsigned char *received_digest)
+bool verifySHA256(unsigned char *digest, unsigned char *receivedDigest)
 {
 
-    if (CRYPTO_memcmp(digest, received_digest, EVP_MD_size(EVP_sha256())) == 0)
+    if (CRYPTO_memcmp(digest, receivedDigest, EVP_MD_size(EVP_sha256())) == 0)
     {
         return true;
     }
@@ -875,7 +680,7 @@ bool verify_SHA256(unsigned char *digest, unsigned char *received_digest)
 }
 
 // Generate SHA-256 HMAC with a 256 bit key
-int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&digest, uint32_t &digestlen, unsigned char *key, uint32_t max_msg_size)
+int generate_SHA256_HMAC(unsigned char *msg, size_t msgLen, unsigned char *&digest, uint32_t &digestlen, unsigned char *key)
 {
     int ret;
     HMAC_CTX *ctx;
@@ -886,15 +691,14 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         if (!ctx)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
-            throw 1;
+            throw 0;
         }
 
         digest = (unsigned char *)malloc(EVP_MD_size(EVP_sha256()));
         if (!digest)
         {
-            free(digest);
             cerr << "[ERROR] Couldn't create context definition!" << endl;
-            throw 2;
+            throw 1;
         }
 
         memset(digest, 0, EVP_MD_size(EVP_sha256()));
@@ -902,28 +706,22 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
         ret = HMAC_Init_ex(ctx, key, EVP_MD_size(EVP_sha256()), EVP_sha256(), NULL);
         if (ret != 1)
         {
-            free(digest);
-            HMAC_CTX_free(ctx);
             cerr << "[ERROR] Couldn't initialize digest creation!" << endl;
-            throw 3;
+            throw 2;
         }
 
-        ret = HMAC_Update(ctx, (unsigned char *)msg, msg_len);
+        ret = HMAC_Update(ctx, (unsigned char *)msg, msgLen);
         if (ret != 1)
         {
-            free(digest);
-            HMAC_CTX_free(ctx);
             cerr << "[ERROR] Couldn't update digest!" << endl;
-            throw 1;
+            throw 2;
         }
 
         ret = HMAC_Final(ctx, digest, &digestlen);
         if (ret != 1)
         {
-            free(digest);
-            HMAC_CTX_free(ctx);
             cerr << "[ERROR] Couldn't finalize digest!" << endl;
-            throw 1;
+            throw 2;
         }
 
         HMAC_CTX_free(ctx);
@@ -932,37 +730,70 @@ int generate_SHA256_HMAC(unsigned char *msg, size_t msg_len, unsigned char *&dig
     }
     catch (int errorCode)
     {
-        //switch
+        if(errorCode > 0){
+            free(digest);
+            if(errorCode == 2) HMAC_CTX_free(ctx);
+        }
         return -1;
     }
 
 
 }
 
-// Hash symmetric key and take a portion of the total
-int hash_symmetric_key(unsigned char *&symm_key, unsigned char *symm_key_no_hashed)
-{
-    unsigned char *hash;
+int hashKey(unsigned char *&symKey, unsigned char *keyToHash){
+
+    unsigned char* hash;
     uint32_t len;
     int ret;
-    int key_size_aes = EVP_CIPHER_key_length(EVP_aes_128_cbc());
+    int aesKeySize = EVP_CIPHER_key_length(EVP_aes_128_cbc());
+    EVP_MD_CTX *ctx;
 
-    ret = generate_SHA256(symm_key_no_hashed, key_size_aes, hash, len, key_size_aes);
-    if (ret != 0)
+    try
     {
-        cerr << "[ERROR] Couldn't hash symmetric key!" << endl;
-        return ret;
-    }
+        hash = (unsigned char *)malloc(EVP_MD_size(EVP_sha256()));
+        if (!hash)
+        {
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw 0;
+        }
 
-    symm_key = (unsigned char *)malloc(key_size_aes); // AES-128
-    if (!symm_key)
-    {
-        cerr << "[ERROR] Couldn't malloc!" << endl;
+        ctx = EVP_MD_CTX_new();
+        if (!ctx)
+        {
+            cerr << "[ERROR] Couldn't create context!" << endl;
+            throw 1;
+        }
+
+        ret = EVP_DigestInit(ctx, EVP_sha256());
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Init error with value: " << ret << endl;
+            throw 2;
+        }
+
+        ret = EVP_DigestUpdate(ctx, (unsigned char *)keyToHash, aesKeySize);
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Update error with value: " << ret << endl;
+            throw 2;
+        }
+
+        ret = EVP_DigestFinal(ctx, hash, &len);
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Final error with value: " << ret << endl;
+            throw 2;
+        }
+    }catch(int errorCode){
+        if(errorCode > 0){
+            free(hash);
+            if(errorCode == 2) EVP_MD_CTX_free(ctx);
+        }
         return -1;
     }
 
     // Take a portion of the mac for 128 bits key (AES)
-    memcpy(symm_key, hash, key_size_aes);
+    memcpy(symKey, hash, aesKeySize);
 
     // Free
     free(hash);
@@ -970,42 +801,13 @@ int hash_symmetric_key(unsigned char *&symm_key, unsigned char *symm_key_no_hash
     return 0;
 }
 
-// Hash hmac key and take a portion of HMAC_KEY_SIZE
-int hash_hmac_key(unsigned char *&hmac_key, unsigned char *hmac_key_no_hashed)
-{
-    unsigned char *hash;
-    uint32_t len;
-    int ret;
 
-    ret = generate_SHA256(hmac_key_no_hashed, HMAC_KEY_SIZE, hash, len, HMAC_KEY_SIZE);
-    if (ret != 0)
-    {
-        cerr << "[ERROR] Couldn't hash symmetric key!" << endl;
-        return ret;
-    }
-
-    hmac_key = (unsigned char *)malloc(HMAC_KEY_SIZE);
-    if (!hmac_key)
-    {
-        cerr << "[ERROR] Couldn't malloc!" << endl;
-        return -1;
-    }
-
-    // Take only HMAC_KEY_SIZE bits out of 256
-    memcpy(hmac_key, hash, HMAC_KEY_SIZE);
-
-    // Free
-    free(hash);
-
-    return 0;
-}
-
-unsigned char *generate_iv()
+unsigned char *generateIV()
 {
     unsigned char *iv = nullptr;
-    int iv_len = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
-    iv = (unsigned char *)malloc(iv_len);
-    int ret = RAND_bytes(iv, iv_len);
+    int ivLen = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
+    iv = (unsigned char *)malloc(ivLen);
+    int ret = RAND_bytes(iv, ivLen);
     if (ret != 1 || !iv)
     {
         // Must free if we have an error!
@@ -1016,59 +818,64 @@ unsigned char *generate_iv()
     return iv;
 }
 
-int cbc_encrypt(unsigned char *msg, int msg_len, unsigned char *&ciphertext, int &cipherlen, unsigned char *key, unsigned char *iv)
+int cbcEncrypt(unsigned char *msg, int msgLen, unsigned char *&ciphertext, int &cipherlen, unsigned char *key, unsigned char *iv)
 {
     EVP_CIPHER_CTX *ctx;
     int ret;
-    int final_len = 0;
-    cipherlen = msg_len + BLOCK_SIZE;
+    int finalLen = 0;
+    cipherlen = msgLen + BLOCK_SIZE;
 
     try{
-        ctx = EVP_CIPHER_CTX_new();
-        if(!ctx){
-            throw 1;
-        }
-
+        
         ciphertext = (unsigned char*)malloc(cipherlen);
         if(!ciphertext){
-            throw 2;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw 0;
+        }
+
+        ctx = EVP_CIPHER_CTX_new();
+        if(!ctx){
+            cerr << "[ERROR] Couldn't create context!" << endl;
+            throw 1;
         }
 
         memset(ciphertext, 0, cipherlen);
 
         ret = EVP_EncryptInit(ctx , EVP_aes_128_cbc(), key, iv);
         if(ret == 0){
-            free(ciphertext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 3;
+            cerr << "[ERROR] Encrypt Init error with value: " << ret << endl;
+            throw 2;
         }
 
-        ret = EVP_EncryptUpdate(ctx, ciphertext, &cipherlen, msg, msg_len);
+        ret = EVP_EncryptUpdate(ctx, ciphertext, &cipherlen, msg, msgLen);
         if(ret == 0){
-            free(ciphertext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 4;
+            cerr << "[ERROR] Encrypt Update error with value: " << ret << endl;
+            throw 2;
         }
         
-        ret = EVP_EncryptFinal(ctx, ciphertext + cipherlen, &final_len);
+        ret = EVP_EncryptFinal(ctx, ciphertext + cipherlen, &finalLen);
         if(ret == 0){
-            free(ciphertext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 5;
+            cerr << "[ERROR] Encrypt Final error with value: " << ret << endl;
+            throw 2;
         }
 
-        cipherlen += final_len;
+        cipherlen += finalLen;
         EVP_CIPHER_CTX_free(ctx);
         return 0;
     }catch(int errorCode){
+
+        if(errorCode > 0 ){
+            free(ciphertext);
+            if(errorCode == 2) EVP_CIPHER_CTX_free(ctx);
+        }
         return -1;
     }
 
 }
 
-int cbc_decrypt(unsigned char *ciphertext, int cipherlen, unsigned char *&plaintext, uint32_t &plainlen, unsigned char *key, unsigned char *iv)
+int cbcDecrypt(unsigned char *ciphertext, int cipherlen, unsigned char *&plaintext, uint32_t &plainlen, unsigned char *key, unsigned char *iv)
 {
-    int final_len = 0;
+    int finalLen = 0;
     plainlen = 0;
     int ret;
 
@@ -1076,44 +883,49 @@ int cbc_decrypt(unsigned char *ciphertext, int cipherlen, unsigned char *&plaint
 
 
     try{
-        ctx = EVP_CIPHER_CTX_new();
-        if(!ctx){
-            throw 1;
-        }
-
         plaintext = (unsigned char*)malloc(cipherlen);
         if(!plaintext){
-            throw 2;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw 0;
+        }
+
+
+        ctx = EVP_CIPHER_CTX_new();
+        if(!ctx){
+            cerr << "[ERROR] Couldn't create context!" << endl;
+            throw 1;
         }
 
         memset(plaintext, 0, cipherlen);
 
         ret = EVP_DecryptInit(ctx , EVP_aes_128_cbc(), key, iv);
         if(ret == 0){
-            free(plaintext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 3;
+            cerr << "[ERROR] Decrypt Init error with value: " << ret << endl;
+            throw 2;
         }
 
-        ret = EVP_DecryptUpdate(ctx, plaintext, &final_len, ciphertext, cipherlen);
+        ret = EVP_DecryptUpdate(ctx, plaintext, &finalLen, ciphertext, cipherlen);
         if(ret == 0){
-            free(plaintext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 4;
+            cerr << "[ERROR] Decrypt Update error with value: " << ret << endl;
+            throw 2;
         }
-        plainlen = final_len;
+        plainlen = finalLen;
 
-        ret = EVP_DecryptFinal(ctx, plaintext + final_len, &final_len);
+        ret = EVP_DecryptFinal(ctx, plaintext + finalLen, &finalLen);
         if(ret == 0){
-            free(plaintext);
-            EVP_CIPHER_CTX_free(ctx);
-            throw 5;
+            cerr << "[ERROR] Decrypt Final error with value: " << ret << endl;
+            throw 2;
         }
-        plainlen += final_len;  
+        plainlen += finalLen;  
         EVP_CIPHER_CTX_free(ctx);
 
         return 0;
     }catch(int errorCode){
+
+        if(errorCode > 0 ){
+            free(plaintext);
+            if(errorCode == 2) EVP_CIPHER_CTX_free(ctx);
+        }
         return -1;
     }
     
