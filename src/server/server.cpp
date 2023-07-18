@@ -525,7 +525,7 @@ bool start_session()
         cerr << "[ERROR] Couldn't derive hmac key!" << endl;
         return false;
     }
-    ret = hashKey(hmac_key, hmac_key_no_hashed);
+    ret = hashHmacKey(hmac_key, hmac_key_no_hashed);
     //cout << "Hmac key: " << hmac_key << "Size of key: "<< hmac_key_length << endl;
 
     if (ret != 0)

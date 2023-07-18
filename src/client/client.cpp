@@ -223,7 +223,7 @@ void receive_login_server_authentication(wave_pkt &hello_pkt, login_authenticati
         throw 3;
     }
 
-    ret = hashKey(hmac_key, hmac_key_no_hashed);
+    ret = hashHmacKey(hmac_key, hmac_key_no_hashed);
     if (ret != 0)
     {
         free(receive_buffer);

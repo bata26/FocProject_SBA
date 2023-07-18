@@ -750,6 +750,13 @@ int hashKey(unsigned char *&symKey, unsigned char *keyToHash){
 
     try
     {
+        symKey = (unsigned char *)malloc(aesKeySize);
+        if (!symKey)
+        {
+            cerr << "ERR: Couldn't malloc!" << endl;
+            throw 0;
+        }
+
         hash = (unsigned char *)malloc(EVP_MD_size(EVP_sha256()));
         if (!hash)
         {
@@ -794,6 +801,71 @@ int hashKey(unsigned char *&symKey, unsigned char *keyToHash){
 
     // Take a portion of the mac for 128 bits key (AES)
     memcpy(symKey, hash, aesKeySize);
+
+    // Free
+    free(hash);
+
+    return 0;
+}
+
+int hashHmacKey(unsigned char *&hmacKey, unsigned char *keyToHash)
+{
+    unsigned char *hash;
+    uint32_t len;
+    int ret; 
+    EVP_MD_CTX *ctx;
+
+    try{
+        hmacKey = (unsigned char *)malloc(HMAC_KEY_SIZE);
+        if (!hmacKey)
+        {
+            throw 0;
+        }
+        hash = (unsigned char *)malloc(EVP_MD_size(EVP_sha256()));
+        if (!hash)
+        {
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw 0;
+        }
+
+        ctx = EVP_MD_CTX_new();
+        if (!ctx)
+        {
+            cerr << "[ERROR] Couldn't create context!" << endl;
+            throw 1;
+        }
+
+        ret = EVP_DigestInit(ctx, EVP_sha256());
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Init error with value: " << ret << endl;
+            throw 2;
+        }
+
+        ret = EVP_DigestUpdate(ctx, (unsigned char *)keyToHash, HMAC_KEY_SIZE);
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Update error with value: " << ret << endl;
+            throw 2;
+        }
+
+        ret = EVP_DigestFinal(ctx, hash, &len);
+        if (ret != 1)
+        {
+            cerr << "[ERROR] Digest Final error with value: " << ret << endl;
+            throw 2;
+        }
+    }catch(int errorCode){
+        if(errorCode > 0){
+            free(hash);
+            if(errorCode == 2) EVP_MD_CTX_free(ctx);
+        }
+        return -1;
+    }
+    
+
+    // Take only HMAC_KEY_SIZE bits out of 256
+    memcpy(hmacKey, hash, HMAC_KEY_SIZE);
 
     // Free
     free(hash);
