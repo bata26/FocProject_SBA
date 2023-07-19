@@ -158,7 +158,7 @@ bool send_message(void *msg, const uint32_t len)
 
 
 // Not encrypted pkt to start dialog
-void receive_wave_pkt(wave_pkt &pkt)
+void receive_wave_pkt(helloPkt &pkt)
 {
     // Receive buffer
     unsigned char *receive_buffer;
@@ -172,16 +172,16 @@ void receive_wave_pkt(wave_pkt &pkt)
     }
 
     // Deserialize pkt
-    if (!pkt.deserialize_message(receive_buffer))
+    if (!pkt.deserializeMessage(receive_buffer))
     {
         free(receive_buffer);
-        if (pkt.symmetric_key_param != nullptr)
+        if (pkt.clientSymmKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.symmetric_key_param);
+            EVP_PKEY_free(pkt.clientSymmKeyParam);
         }
-        if (pkt.hmac_key_param != nullptr)
+        if (pkt.clientHmacKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.hmac_key_param);
+            EVP_PKEY_free(pkt.clientHmacKeyParam);
         }
         throw 2;
     }
@@ -190,13 +190,13 @@ void receive_wave_pkt(wave_pkt &pkt)
     if (!check_username(pkt.username))
     {
         free(receive_buffer);
-        if (pkt.symmetric_key_param != nullptr)
+        if (pkt.clientSymmKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.symmetric_key_param);
+            EVP_PKEY_free(pkt.clientSymmKeyParam);
         }
-        if (pkt.hmac_key_param != nullptr)
+        if (pkt.clientHmacKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.hmac_key_param);
+            EVP_PKEY_free(pkt.clientHmacKeyParam);
         }
         throw 3;
     }
@@ -207,16 +207,16 @@ void receive_wave_pkt(wave_pkt &pkt)
     user_key_path = "./src/server/user_keys/" + loggedUser + "_pubK.pem";
 
     // check if key params are valid
-    if (pkt.symmetric_key_param == nullptr || pkt.hmac_key_param == nullptr)
+    if (pkt.clientSymmKeyParam == nullptr || pkt.clientHmacKeyParam == nullptr)
     {
         free(receive_buffer);
-        if (pkt.symmetric_key_param != nullptr)
+        if (pkt.clientSymmKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.symmetric_key_param);
+            EVP_PKEY_free(pkt.clientSymmKeyParam);
         }
-        if (pkt.hmac_key_param != nullptr)
+        if (pkt.clientHmacKeyParam != nullptr)
         {
-            EVP_PKEY_free(pkt.hmac_key_param);
+            EVP_PKEY_free(pkt.clientHmacKeyParam);
         }
         loggedUser = "";
         user_key_path = "";
@@ -286,9 +286,9 @@ void send_login_server_authentication(login_authentication_pkt &pkt)
         throw 4;
     }
 
-    pkt.iv_cbc = iv;
-    pkt.encrypted_signing = ciphertext;
-    pkt.encrypted_signing_len = cipherlen;
+    pkt.iv = iv;
+    pkt.encryptedSign = ciphertext;
+    pkt.encryptedSignLen = cipherlen;
 
     // Final serialization
     free(to_copy);
@@ -329,7 +329,7 @@ void send_login_server_authentication(login_authentication_pkt &pkt)
 }
 
 // Receive last pkt to finalize the shared secret
-void receive_login_client_authentication(login_authentication_pkt &pkt, login_authentication_pkt &server_auth_pkt, wave_pkt &hello_pkt)
+void receive_login_client_authentication(login_authentication_pkt &pkt, login_authentication_pkt &server_auth_pkt, helloPkt &hello_pkt)
 {
     int ret;
     unsigned char *receive_buffer;
@@ -366,9 +366,9 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
         throw 3;
     }
 
-    memcpy(iv, pkt.iv_cbc, ivSize);
+    memcpy(iv, pkt.iv, ivSize);
     //free(server_auth_pkt.iv_cbc);
-    ret = cbcDecrypt(pkt.encrypted_signing, pkt.encrypted_signing_len, plaintext, plainlen, symmetric_key, iv);
+    ret = cbcDecrypt(pkt.encryptedSign, pkt.encryptedSignLen, plaintext, plainlen, symmetric_key, iv);
 
     if (ret != 0)
     {
@@ -391,14 +391,14 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
         free(plaintext);
         throw 5;
     }
-    pkt.symmetric_key_param_client = hello_pkt.symmetric_key_param;
-    pkt.symmetric_key_param_len_client = hello_pkt.symmetric_key_param_len;
-    pkt.hmac_key_param_client = hello_pkt.hmac_key_param;
-    pkt.hmac_key_param_len_client = hello_pkt.hmac_key_param_len;
-    pkt.symmetric_key_param_server = server_auth_pkt.symmetric_key_param_server_clear;
-    pkt.symmetric_key_param_len_server = pkt.symmetric_key_param_server_clear_len;
-    pkt.hmac_key_param_server = server_auth_pkt.hmac_key_param_server_clear;
-    pkt.hmac_key_param_len_server = server_auth_pkt.hmac_key_param_server_clear_len;
+    pkt.symmetric_key_param_client = hello_pkt.clientSymmKeyParam;
+    pkt.symmetric_key_param_len_client = hello_pkt.symmetricKeyLen;
+    pkt.hmac_key_param_client = hello_pkt.clientHmacKeyParam;
+    pkt.hmac_key_param_len_client = hello_pkt.hmacKeyLen;
+    pkt.symmetric_key_param_server = server_auth_pkt.serverSymmetricKeyParamClear;
+    pkt.symmetric_key_param_len_server = pkt.serverSymmetricKeyParamClearLen;
+    pkt.hmac_key_param_server = server_auth_pkt.serverHmacKeyParamClear;
+    pkt.hmac_key_param_len_server = server_auth_pkt.serverHmacKeyParamClearLen;
 
     // Server serializes as the client did
     unsigned char* to_copy = (unsigned char *)pkt.serialize_part_to_encrypt(signed_text_len);
@@ -436,7 +436,7 @@ void receive_login_client_authentication(login_authentication_pkt &pkt, login_au
 bool start_session()
 {
     int ret;
-    struct wave_pkt hello_pkt;
+    struct helloPkt hello_pkt;
     struct login_authentication_pkt server_auth_pkt;
     struct login_authentication_pkt client_auth_pkt;
     unsigned char *symmetric_key_no_hashed;
@@ -480,8 +480,8 @@ bool start_session()
     cout << "LOGIN SESSION OF USERNAME: " + hello_pkt.username << endl;
 
     // Generate dh keys for the server
-    server_auth_pkt.symmetric_key_param_server_clear = generateDhKey();
-    server_auth_pkt.symmetric_key_param_server = server_auth_pkt.symmetric_key_param_server_clear; // TO ENCRYPT
+    server_auth_pkt.serverSymmetricKeyParamClear = generateDhKey();
+    server_auth_pkt.symmetric_key_param_server = server_auth_pkt.serverSymmetricKeyParamClear; // TO ENCRYPT
 
     if (server_auth_pkt.symmetric_key_param_server == nullptr)
     {
@@ -489,8 +489,8 @@ bool start_session()
         return false;
     }
 
-    server_auth_pkt.hmac_key_param_server_clear = generateDhKey();
-    server_auth_pkt.hmac_key_param_server = server_auth_pkt.hmac_key_param_server_clear; // TO ENCRYPT
+    server_auth_pkt.serverHmacKeyParamClear = generateDhKey();
+    server_auth_pkt.hmac_key_param_server = server_auth_pkt.serverHmacKeyParamClear; // TO ENCRYPT
 
     if (server_auth_pkt.hmac_key_param_server == nullptr)
     {
@@ -499,11 +499,11 @@ bool start_session()
     }
 
     // set the params sent by client
-    server_auth_pkt.symmetric_key_param_client = hello_pkt.symmetric_key_param;
-    server_auth_pkt.hmac_key_param_client = hello_pkt.hmac_key_param;
+    server_auth_pkt.symmetric_key_param_client = hello_pkt.clientSymmKeyParam;
+    server_auth_pkt.hmac_key_param_client = hello_pkt.clientHmacKeyParam;
 
     // derive symmetric key and hmac key, hash them, take a portion of the hash for the 128 bit key
-    symmetric_key_no_hashed = deriveSharedSecret(server_auth_pkt.symmetric_key_param_server, hello_pkt.symmetric_key_param);
+    symmetric_key_no_hashed = deriveSharedSecret(server_auth_pkt.symmetric_key_param_server, hello_pkt.clientSymmKeyParam);
 
     if (!symmetric_key_no_hashed)
     {
@@ -518,7 +518,7 @@ bool start_session()
         return false;
     }
 
-    hmac_key_no_hashed = deriveSharedSecret(server_auth_pkt.hmac_key_param_server, hello_pkt.hmac_key_param);
+    hmac_key_no_hashed = deriveSharedSecret(server_auth_pkt.hmac_key_param_server, hello_pkt.clientHmacKeyParam);
 
     if (!hmac_key_no_hashed)
     {
@@ -578,10 +578,10 @@ bool start_session()
             break;
         }
         }
-        EVP_PKEY_free(hello_pkt.symmetric_key_param);
-        EVP_PKEY_free(hello_pkt.hmac_key_param);
-        EVP_PKEY_free(server_auth_pkt.symmetric_key_param_server_clear);
-        EVP_PKEY_free(server_auth_pkt.hmac_key_param_server_clear);
+        EVP_PKEY_free(hello_pkt.clientSymmKeyParam);
+        EVP_PKEY_free(hello_pkt.clientHmacKeyParam);
+        EVP_PKEY_free(server_auth_pkt.serverSymmetricKeyParamClear);
+        EVP_PKEY_free(server_auth_pkt.serverHmacKeyParamClear);
         return false;
     }
 
@@ -627,20 +627,20 @@ bool start_session()
             break;
         }
         }
-        EVP_PKEY_free(hello_pkt.symmetric_key_param);
-        EVP_PKEY_free(hello_pkt.hmac_key_param);
-        EVP_PKEY_free(server_auth_pkt.symmetric_key_param_server_clear);
-        EVP_PKEY_free(server_auth_pkt.hmac_key_param_server_clear);
+        EVP_PKEY_free(hello_pkt.clientSymmKeyParam);
+        EVP_PKEY_free(hello_pkt.clientHmacKeyParam);
+        EVP_PKEY_free(server_auth_pkt.serverSymmetricKeyParamClear);
+        EVP_PKEY_free(server_auth_pkt.serverHmacKeyParamClear);
         return false;
     }
 
     cout << "CLIENT CORRECTLY AUTHENTICATED" << endl;
 
     // Frees
-    EVP_PKEY_free(hello_pkt.symmetric_key_param);
-    EVP_PKEY_free(hello_pkt.hmac_key_param);
-    EVP_PKEY_free(server_auth_pkt.symmetric_key_param_server_clear);
-    EVP_PKEY_free(server_auth_pkt.hmac_key_param_server_clear);
+    EVP_PKEY_free(hello_pkt.clientSymmKeyParam);
+    EVP_PKEY_free(hello_pkt.clientHmacKeyParam);
+    EVP_PKEY_free(server_auth_pkt.serverSymmetricKeyParamClear);
+    EVP_PKEY_free(server_auth_pkt.serverHmacKeyParamClear);
 
     return true;
 }

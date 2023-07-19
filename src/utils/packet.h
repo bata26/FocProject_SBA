@@ -17,102 +17,102 @@
 using namespace std;
 
 
-struct wave_pkt
+struct helloPkt
 {
     uint16_t code = HELLO;
-    uint16_t username_len;
+    uint16_t usernameLen;
     string username;
-    uint32_t symmetric_key_param_len;
-    uint32_t hmac_key_param_len;
-    EVP_PKEY* symmetric_key_param = nullptr;
-    EVP_PKEY* hmac_key_param = nullptr;
+    uint32_t symmetricKeyLen;
+    uint32_t hmacKeyLen;
+    EVP_PKEY* clientSymmKeyParam = nullptr;
+    EVP_PKEY* clientHmacKeyParam = nullptr;
 
     //Serialize the message to send it through the network
-    void* serialize_message(int &len)
+    void* serializeMessage(int &len)
     {
-        uint8_t* serialized_pkt = nullptr;
-        int pointer_counter = 0;
+        uint8_t* serializedPkt = nullptr;
+        int pointer = 0;
 
-        void* key_buffer_symmetric = nullptr;
-        void* key_buffer_hmac = nullptr;   
+        void* bufferSymmetricKey = nullptr;
+        void* bufferHmacKey = nullptr;   
 
         // Serializes key to send it throught the network using BIO structure
-        key_buffer_symmetric = serializeKey(symmetric_key_param, symmetric_key_param_len);
-        if (key_buffer_symmetric == nullptr)
+        bufferSymmetricKey = serializeKey(clientSymmKeyParam, symmetricKeyLen);
+        if (bufferSymmetricKey == nullptr)
         {
             return nullptr;
         }
 
         // Serializes key to send it throught the network using BIO structure
-        key_buffer_hmac = serializeKey(hmac_key_param, hmac_key_param_len);
-        if (key_buffer_hmac == nullptr)
+        bufferHmacKey = serializeKey(clientHmacKeyParam, hmacKeyLen);
+        if (bufferHmacKey == nullptr)
         {
             return nullptr;
         }
 
         uint16_t certified_code = htons(code);
-        username_len = username.length();
-        uint16_t certified_username_len = htons(username_len);
+        usernameLen = username.length();
+        uint16_t certified_username_len = htons(usernameLen);
 
         // Total length of the serialized packet
-        len = sizeof(certified_code) + sizeof(certified_username_len) + username_len + sizeof(symmetric_key_param_len) + sizeof(hmac_key_param_len) + symmetric_key_param_len + hmac_key_param_len;
-        serialized_pkt = (uint8_t *)malloc(len);
-        if (!serialized_pkt)
+        len = sizeof(certified_code) + sizeof(certified_username_len) + usernameLen + sizeof(symmetricKeyLen) + sizeof(hmacKeyLen) + symmetricKeyLen + hmacKeyLen;
+        serializedPkt = (uint8_t *)malloc(len);
+        if (!serializedPkt)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
             return nullptr;
         }
 
         // Copy of the code
-        memcpy(serialized_pkt, &certified_code, sizeof(certified_code));
-        pointer_counter += sizeof(code);
+        memcpy(serializedPkt, &certified_code, sizeof(certified_code));
+        pointer += sizeof(code);
 
         // Copy username_len
-        memcpy(serialized_pkt + pointer_counter, &certified_username_len, sizeof(certified_username_len));
-        pointer_counter += sizeof(username_len);
+        memcpy(serializedPkt + pointer, &certified_username_len, sizeof(certified_username_len));
+        pointer += sizeof(usernameLen);
 
         // Copy of the username
         uint8_t* username_certified = (uint8_t *)username.c_str();
-        memcpy(serialized_pkt + pointer_counter, username_certified, username_len);
-        pointer_counter += username_len;
+        memcpy(serializedPkt + pointer, username_certified, usernameLen);
+        pointer += usernameLen;
 
         // Copy of symmetric_key_param_len
-        uint32_t certified_symmetric_len = htonl(symmetric_key_param_len);
-        memcpy(serialized_pkt + pointer_counter, &certified_symmetric_len, sizeof(certified_symmetric_len));
-        pointer_counter += sizeof(certified_symmetric_len);
+        uint32_t certified_symmetric_len = htonl(symmetricKeyLen);
+        memcpy(serializedPkt + pointer, &certified_symmetric_len, sizeof(certified_symmetric_len));
+        pointer += sizeof(certified_symmetric_len);
 
         // Copy of hmac_key_param_len
-        uint32_t certified_hmac_len = htonl(hmac_key_param_len);
-        memcpy(serialized_pkt + pointer_counter, &certified_hmac_len, sizeof(certified_hmac_len));
-        pointer_counter += sizeof(certified_hmac_len);
+        uint32_t certified_hmac_len = htonl(hmacKeyLen);
+        memcpy(serializedPkt + pointer, &certified_hmac_len, sizeof(certified_hmac_len));
+        pointer += sizeof(certified_hmac_len);
 
         // Copy of the symmetric_key_param buffer
-        memcpy(serialized_pkt + pointer_counter, key_buffer_symmetric, symmetric_key_param_len);
-        pointer_counter += symmetric_key_param_len;
+        memcpy(serializedPkt + pointer, bufferSymmetricKey, symmetricKeyLen);
+        pointer += symmetricKeyLen;
 
         // Copy of the hmac_key_param buffer
-        memcpy(serialized_pkt + pointer_counter, key_buffer_hmac, hmac_key_param_len);
+        memcpy(serializedPkt + pointer, bufferHmacKey, hmacKeyLen);
 
-        free(key_buffer_symmetric);
-        free(key_buffer_hmac);
+        free(bufferSymmetricKey);
+        free(bufferHmacKey);
 
-        return serialized_pkt;
+        return serializedPkt;
     }
 
     //Deserializes a message received from the network
-    bool deserialize_message(uint8_t* serialized_pkt)
+    bool deserializeMessage(uint8_t* serializedPkt)
     {
-        uint64_t pointer_counter = 0;
+        uint64_t pointer = 0;
 
         // Copy of the code
-        memcpy(&code, serialized_pkt, sizeof(code));
+        memcpy(&code, serializedPkt, sizeof(code));
         code = ntohs(code);
 
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(code))
+        if (pointer > numeric_limits<uint64_t>::max() - sizeof(code))
         {
             return false;
         }
-        pointer_counter += sizeof(code);
+        pointer += sizeof(code);
 
         //Checks code of the packet
         if (code != HELLO)
@@ -122,51 +122,51 @@ struct wave_pkt
         }
 
         // Copy username_len
-        memcpy(&username_len, serialized_pkt + pointer_counter, sizeof(username_len));
-        username_len = ntohs(username_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(username_len))
+        memcpy(&usernameLen, serializedPkt + pointer, sizeof(usernameLen));
+        usernameLen = ntohs(usernameLen);
+        if (pointer > numeric_limits<uint64_t>::max() - sizeof(usernameLen))
         {
             return false;
         }
-        pointer_counter += sizeof(username_len);
+        pointer += sizeof(usernameLen);
 
         // Copy username
-        username.assign((char *)serialized_pkt + pointer_counter, username_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - username_len)
+        username.assign((char *)serializedPkt + pointer, usernameLen);
+        if (pointer > numeric_limits<uint64_t>::max() - usernameLen)
         {
             return false;
         }
-        pointer_counter += username_len;
+        pointer += usernameLen;
 
         // Copy of symmetric_key_param_len
-        memcpy(&symmetric_key_param_len, serialized_pkt + pointer_counter, sizeof(symmetric_key_param_len));
-        symmetric_key_param_len = ntohl(symmetric_key_param_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(symmetric_key_param_len))
+        memcpy(&symmetricKeyLen, serializedPkt + pointer, sizeof(symmetricKeyLen));
+        symmetricKeyLen = ntohl(symmetricKeyLen);
+        if (pointer > numeric_limits<uint64_t>::max() - sizeof(symmetricKeyLen))
         {
             return false;
         }
-        pointer_counter += sizeof(symmetric_key_param_len);
+        pointer += sizeof(symmetricKeyLen);
 
         // Copy of hmac_key_param_len
-        memcpy(&hmac_key_param_len, serialized_pkt + pointer_counter, sizeof(hmac_key_param_len));
-        hmac_key_param_len = ntohl(hmac_key_param_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(hmac_key_param_len))
+        memcpy(&hmacKeyLen, serializedPkt + pointer, sizeof(hmacKeyLen));
+        hmacKeyLen = ntohl(hmacKeyLen);
+        if (pointer > numeric_limits<uint64_t>::max() - sizeof(hmacKeyLen))
         {
             return false;
         }
-        pointer_counter += sizeof(hmac_key_param_len);
+        pointer += sizeof(hmacKeyLen);
 
         // Copy of the symmetric parameter
-        symmetric_key_param = deserializeKey(serialized_pkt + pointer_counter, symmetric_key_param_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - symmetric_key_param_len)
+        clientSymmKeyParam = deserializeKey(serializedPkt + pointer, symmetricKeyLen);
+        if (pointer > numeric_limits<uint64_t>::max() - symmetricKeyLen)
         {
             return false;
         }
-        pointer_counter += symmetric_key_param_len;
+        pointer += symmetricKeyLen;
         // Copy of the hmac parameter
-        hmac_key_param = deserializeKey(serialized_pkt + pointer_counter, hmac_key_param_len);
+        clientHmacKeyParam = deserializeKey(serializedPkt + pointer, hmacKeyLen);
 
-        if (hmac_key_param == nullptr || symmetric_key_param == nullptr)
+        if (clientHmacKeyParam == nullptr || clientSymmKeyParam == nullptr)
         {
             cerr << "[ERROR] Couldn't deserialize correctly a key! " << endl;
             return false;
@@ -178,16 +178,15 @@ struct wave_pkt
 struct login_authentication_pkt
 {
     // Clear
-    uint32_t cert_len = 0;
-    uint32_t symmetric_key_param_server_clear_len = 0;
-    uint32_t hmac_key_param_server_clear_len = 0;
-    uint32_t encrypted_signing_len = 0;
-    uint8_t* iv_cbc = nullptr;
-    EVP_PKEY* symmetric_key_param_server_clear = nullptr;
-    EVP_PKEY* hmac_key_param_server_clear = nullptr;
+    uint32_t serverSymmetricKeyParamClearLen = 0;
+    uint32_t serverHmacKeyParamClearLen = 0;
+    uint32_t encryptedSignLen = 0;
+    uint8_t* iv = nullptr;
+    EVP_PKEY* serverSymmetricKeyParamClear = nullptr;
+    EVP_PKEY* serverHmacKeyParamClear = nullptr;
 
     //Encrypted sign
-    uint8_t* encrypted_signing = nullptr;
+    uint8_t* encryptedSign = nullptr;
 
     // Encrypted signed part to be serialized
     uint32_t symmetric_key_param_len_server = 0;
@@ -263,24 +262,24 @@ struct login_authentication_pkt
         void* key_buffer_symmetric_server_clear = nullptr;
         void* key_buffer_hmac_server_clear = nullptr;
 
-        if (encrypted_signing == nullptr || encrypted_signing_len == 0 || iv_cbc == nullptr)
+        if (encryptedSign == nullptr || encryptedSignLen == 0 || iv == nullptr)
         {
             cerr << "[ERROR] Missing field!" << endl;
             return nullptr;
         }
 
         // Symm_key
-        key_buffer_symmetric_server_clear = serializeKey(symmetric_key_param_server_clear, symmetric_key_param_server_clear_len);
-        uint32_t certified_symmetric_key_server_clear_len = htonl(symmetric_key_param_server_clear_len);
+        key_buffer_symmetric_server_clear = serializeKey(serverSymmetricKeyParamClear, serverSymmetricKeyParamClearLen);
+        uint32_t certified_symmetric_key_server_clear_len = htonl(serverSymmetricKeyParamClearLen);
 
         // Hmac_key
-        key_buffer_hmac_server_clear = serializeKey(hmac_key_param_server_clear, hmac_key_param_server_clear_len);
-        uint32_t certified_hmac_key_server_clear_len = htonl(hmac_key_param_server_clear_len);
+        key_buffer_hmac_server_clear = serializeKey(serverHmacKeyParamClear, serverHmacKeyParamClearLen);
+        uint32_t certified_hmac_key_server_clear_len = htonl(serverHmacKeyParamClearLen);
 
-        uint32_t certified_encrypted_signing_len = htonl(encrypted_signing_len);
+        uint32_t certified_encrypted_signing_len = htonl(encryptedSignLen);
 
         //Total len
-        len = sizeof(certified_symmetric_key_server_clear_len) + sizeof(certified_hmac_key_server_clear_len) + sizeof(certified_encrypted_signing_len) + IV_LENGTH + symmetric_key_param_server_clear_len + hmac_key_param_server_clear_len + encrypted_signing_len;
+        len = sizeof(certified_symmetric_key_server_clear_len) + sizeof(certified_hmac_key_server_clear_len) + sizeof(certified_encrypted_signing_len) + IV_LENGTH + serverSymmetricKeyParamClearLen + serverHmacKeyParamClearLen + encryptedSignLen;
 
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
@@ -295,14 +294,14 @@ struct login_authentication_pkt
         memcpy(serialized_pkt + pointer_counter, &certified_hmac_key_server_clear_len, sizeof(certified_hmac_key_server_clear_len));
         pointer_counter += sizeof(certified_hmac_key_server_clear_len);
         memcpy(serialized_pkt + pointer_counter, &certified_encrypted_signing_len, sizeof(certified_encrypted_signing_len));
-        pointer_counter += sizeof(encrypted_signing_len);
-        memcpy(serialized_pkt + pointer_counter, iv_cbc, IV_LENGTH);
+        pointer_counter += sizeof(encryptedSignLen);
+        memcpy(serialized_pkt + pointer_counter, iv, IV_LENGTH);
         pointer_counter += IV_LENGTH;
-        memcpy(serialized_pkt + pointer_counter, key_buffer_symmetric_server_clear, symmetric_key_param_server_clear_len);
-        pointer_counter += symmetric_key_param_server_clear_len;
-        memcpy(serialized_pkt + pointer_counter, key_buffer_hmac_server_clear, hmac_key_param_server_clear_len);
-        pointer_counter += hmac_key_param_server_clear_len;
-        memcpy(serialized_pkt + pointer_counter, encrypted_signing, encrypted_signing_len);
+        memcpy(serialized_pkt + pointer_counter, key_buffer_symmetric_server_clear, serverSymmetricKeyParamClearLen);
+        pointer_counter += serverSymmetricKeyParamClearLen;
+        memcpy(serialized_pkt + pointer_counter, key_buffer_hmac_server_clear, serverHmacKeyParamClearLen);
+        pointer_counter += serverHmacKeyParamClearLen;
+        memcpy(serialized_pkt + pointer_counter, encryptedSign, encryptedSignLen);
 
         // Frees
         free(key_buffer_symmetric_server_clear);
@@ -315,16 +314,16 @@ struct login_authentication_pkt
         int pointer_counter = 0;
         uint8_t* serialized_pkt;
 
-        if (encrypted_signing == nullptr || encrypted_signing_len == 0 || iv_cbc == nullptr)
+        if (encryptedSign == nullptr || encryptedSignLen == 0 || iv == nullptr)
         {
             cerr << "[ERROR] Missing field!" << endl;
             return nullptr;
         }
 
-        uint32_t certified_encrypted_signing_len = htonl(encrypted_signing_len);
+        uint32_t certified_encrypted_signing_len = htonl(encryptedSignLen);
 
         //Total len
-        len = sizeof(certified_encrypted_signing_len) + IV_LENGTH + cert_len + encrypted_signing_len;
+        len = sizeof(certified_encrypted_signing_len) + IV_LENGTH +  encryptedSignLen;
 
         serialized_pkt = (uint8_t *)malloc(len);
         if (!serialized_pkt)
@@ -335,10 +334,10 @@ struct login_authentication_pkt
 
         // Start copying
         memcpy(serialized_pkt + pointer_counter, &certified_encrypted_signing_len, sizeof(certified_encrypted_signing_len));
-        pointer_counter += sizeof(encrypted_signing_len);
-        memcpy(serialized_pkt + pointer_counter, iv_cbc, IV_LENGTH);
+        pointer_counter += sizeof(encryptedSignLen);
+        memcpy(serialized_pkt + pointer_counter, iv, IV_LENGTH);
         pointer_counter += IV_LENGTH;
-        memcpy(serialized_pkt + pointer_counter, encrypted_signing, encrypted_signing_len);
+        memcpy(serialized_pkt + pointer_counter, encryptedSign, encryptedSignLen);
 
         return serialized_pkt;
     }
@@ -347,85 +346,85 @@ struct login_authentication_pkt
     {
         uint64_t pointer_counter = 0;
 
-        if (iv_cbc != nullptr)
+        if (iv != nullptr)
         {
-            iv_cbc = nullptr;
+            iv = nullptr;
         }
 
         // From the serialized_pkt_received we get all the lengths and then the keys
-        memcpy(&symmetric_key_param_server_clear_len, serialized_pkt_received + pointer_counter, sizeof(symmetric_key_param_server_clear_len));
-        symmetric_key_param_server_clear_len = ntohl(symmetric_key_param_server_clear_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(symmetric_key_param_server_clear_len))
+        memcpy(&serverSymmetricKeyParamClearLen, serialized_pkt_received + pointer_counter, sizeof(serverSymmetricKeyParamClearLen));
+        serverSymmetricKeyParamClearLen = ntohl(serverSymmetricKeyParamClearLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(serverSymmetricKeyParamClearLen))
         {
             return false;
         }
-        pointer_counter += sizeof(symmetric_key_param_server_clear_len);
+        pointer_counter += sizeof(serverSymmetricKeyParamClearLen);
 
-        memcpy(&hmac_key_param_server_clear_len, serialized_pkt_received + pointer_counter, sizeof(hmac_key_param_server_clear_len));
-        hmac_key_param_server_clear_len = ntohl(hmac_key_param_server_clear_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(hmac_key_param_server_clear_len))
+        memcpy(&serverHmacKeyParamClearLen, serialized_pkt_received + pointer_counter, sizeof(serverHmacKeyParamClearLen));
+        serverHmacKeyParamClearLen = ntohl(serverHmacKeyParamClearLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(serverHmacKeyParamClearLen))
         {
             return false;
         }
-        pointer_counter += sizeof(hmac_key_param_server_clear_len);
+        pointer_counter += sizeof(serverHmacKeyParamClearLen);
 
-        memcpy(&encrypted_signing_len, serialized_pkt_received + pointer_counter, sizeof(encrypted_signing_len));
-        encrypted_signing_len = ntohl(encrypted_signing_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(encrypted_signing_len))
+        memcpy(&encryptedSignLen, serialized_pkt_received + pointer_counter, sizeof(encryptedSignLen));
+        encryptedSignLen = ntohl(encryptedSignLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(encryptedSignLen))
         {
             return false;
         }
-        pointer_counter += sizeof(encrypted_signing_len);
+        pointer_counter += sizeof(encryptedSignLen);
 
-        iv_cbc = (unsigned char *)malloc(IV_LENGTH);
-        if (!iv_cbc)
+        iv = (unsigned char *)malloc(IV_LENGTH);
+        if (!iv)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
-        memcpy(iv_cbc, serialized_pkt_received + pointer_counter, IV_LENGTH);
+        memcpy(iv, serialized_pkt_received + pointer_counter, IV_LENGTH);
         if (pointer_counter > numeric_limits<uint64_t>::max() - IV_LENGTH)
         {
             return false;
         }
         pointer_counter += IV_LENGTH;
 
-        symmetric_key_param_server_clear = deserializeKey(serialized_pkt_received + pointer_counter, symmetric_key_param_server_clear_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - symmetric_key_param_server_clear_len)
+        serverSymmetricKeyParamClear = deserializeKey(serialized_pkt_received + pointer_counter, serverSymmetricKeyParamClearLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - serverSymmetricKeyParamClearLen)
         {
             return false;
         }
-        pointer_counter += symmetric_key_param_server_clear_len;
-        if (symmetric_key_param_server_clear == nullptr)
+        pointer_counter += serverSymmetricKeyParamClearLen;
+        if (serverSymmetricKeyParamClear == nullptr)
         {
             cerr << "error in deserialization of symmetric key param" << endl;
             return false;
         }
 
-        hmac_key_param_server_clear = deserializeKey(serialized_pkt_received + pointer_counter, hmac_key_param_server_clear_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - hmac_key_param_server_clear_len)
+        serverHmacKeyParamClear = deserializeKey(serialized_pkt_received + pointer_counter, serverHmacKeyParamClearLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - serverHmacKeyParamClearLen)
         {
             return false;
         }
-        pointer_counter += hmac_key_param_server_clear_len;
-        if (hmac_key_param_server_clear == nullptr)
+        pointer_counter += serverHmacKeyParamClearLen;
+        if (serverHmacKeyParamClear == nullptr)
         {
             cerr << "error in deserialization of hmac key param" << endl;
             return false;
         }
 
-        encrypted_signing = (uint8_t *)malloc(encrypted_signing_len);
-        if (!encrypted_signing)
+        encryptedSign = (uint8_t *)malloc(encryptedSignLen);
+        if (!encryptedSign)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
-        memcpy(encrypted_signing, serialized_pkt_received + pointer_counter, encrypted_signing_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - encrypted_signing_len)
+        memcpy(encryptedSign, serialized_pkt_received + pointer_counter, encryptedSignLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - encryptedSignLen)
         {
             return false;
         }
-        pointer_counter += encrypted_signing_len;
+        pointer_counter += encryptedSignLen;
 
         return true;
     }
@@ -434,40 +433,40 @@ struct login_authentication_pkt
     {
         uint64_t pointer_counter = 0;
 
-        if (iv_cbc != nullptr)
+        if (iv != nullptr)
         {
-            iv_cbc = nullptr;
+            iv = nullptr;
         }
 
-        memcpy(&encrypted_signing_len, serialized_pkt_received + pointer_counter, sizeof(encrypted_signing_len));
-        encrypted_signing_len = ntohl(encrypted_signing_len);
-        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(encrypted_signing_len))
+        memcpy(&encryptedSignLen, serialized_pkt_received + pointer_counter, sizeof(encryptedSignLen));
+        encryptedSignLen = ntohl(encryptedSignLen);
+        if (pointer_counter > numeric_limits<uint64_t>::max() - sizeof(encryptedSignLen))
         {
             return false;
         }
-        pointer_counter += sizeof(encrypted_signing_len);
+        pointer_counter += sizeof(encryptedSignLen);
 
-        iv_cbc = (unsigned char *)malloc(IV_LENGTH);
-        if (!iv_cbc)
+        iv = (unsigned char *)malloc(IV_LENGTH);
+        if (!iv)
         {
             cerr << "[ERROR] Couldn't malloc!" << endl;
             return false;
         }
-        memcpy(iv_cbc, serialized_pkt_received + pointer_counter, IV_LENGTH);
+        memcpy(iv, serialized_pkt_received + pointer_counter, IV_LENGTH);
         if (pointer_counter > numeric_limits<uint64_t>::max() - IV_LENGTH)
         {
             return false;
         }
         pointer_counter += IV_LENGTH;
 
-        encrypted_signing = (uint8_t *)malloc(encrypted_signing_len);
-        if (!encrypted_signing)
+        encryptedSign = (uint8_t *)malloc(encryptedSignLen);
+        if (!encryptedSign)
         {
             cerr << "encrypted signing malloc failed" << endl;
             return false;
         }
 
-        memcpy(encrypted_signing, serialized_pkt_received + pointer_counter, encrypted_signing_len);
+        memcpy(encryptedSign, serialized_pkt_received + pointer_counter, encryptedSignLen);
 
         return true;
     }
