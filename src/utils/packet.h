@@ -50,12 +50,12 @@ struct helloPkt
             return nullptr;
         }
 
-        uint16_t certified_code = htons(code);
+        uint16_t netCode = htons(code);
         usernameLen = username.length();
-        uint16_t certified_username_len = htons(usernameLen);
+        uint16_t usernameNetLen = htons(usernameLen);
 
         // Total length of the serialized packet
-        len = sizeof(certified_code) + sizeof(certified_username_len) + usernameLen + sizeof(symmetricKeyLen) + sizeof(hmacKeyLen) + symmetricKeyLen + hmacKeyLen;
+        len = sizeof(netCode) + sizeof(usernameNetLen) + usernameLen + sizeof(symmetricKeyLen) + sizeof(hmacKeyLen) + symmetricKeyLen + hmacKeyLen;
         serializedPkt = (uint8_t *)malloc(len);
         if (!serializedPkt)
         {
@@ -64,11 +64,11 @@ struct helloPkt
         }
 
         // Copy of the code
-        memcpy(serializedPkt, &certified_code, sizeof(certified_code));
+        memcpy(serializedPkt, &netCode, sizeof(netCode));
         pointer += sizeof(code);
 
         // Copy username_len
-        memcpy(serializedPkt + pointer, &certified_username_len, sizeof(certified_username_len));
+        memcpy(serializedPkt + pointer, &usernameNetLen, sizeof(usernameNetLen));
         pointer += sizeof(usernameLen);
 
         // Copy of the username
@@ -77,14 +77,14 @@ struct helloPkt
         pointer += usernameLen;
 
         // Copy of symmetric_key_param_len
-        uint32_t certified_symmetric_len = htonl(symmetricKeyLen);
-        memcpy(serializedPkt + pointer, &certified_symmetric_len, sizeof(certified_symmetric_len));
-        pointer += sizeof(certified_symmetric_len);
+        uint32_t symmetricKeyNetLen = htonl(symmetricKeyLen);
+        memcpy(serializedPkt + pointer, &symmetricKeyNetLen, sizeof(symmetricKeyNetLen));
+        pointer += sizeof(symmetricKeyNetLen);
 
         // Copy of hmac_key_param_len
-        uint32_t certified_hmac_len = htonl(hmacKeyLen);
-        memcpy(serializedPkt + pointer, &certified_hmac_len, sizeof(certified_hmac_len));
-        pointer += sizeof(certified_hmac_len);
+        uint32_t hmacKeyNetLen = htonl(hmacKeyLen);
+        memcpy(serializedPkt + pointer, &hmacKeyNetLen, sizeof(hmacKeyNetLen));
+        pointer += sizeof(hmacKeyNetLen);
 
         // Copy of the symmetric_key_param buffer
         memcpy(serializedPkt + pointer, bufferSymmetricKey, symmetricKeyLen);
@@ -191,11 +191,13 @@ struct loginAuthenticationPkt
     // Encrypted signed part to be serialized
     uint32_t serverSymmetricKeyParamLen = 0;
     uint32_t serverHmacKeyParamLen = 0;
+
     uint32_t clientSymmetricKeyParamLen = 0;
     uint32_t clientHmacKeyParamLen = 0;
 
     EVP_PKEY* serverSymmetricKeyParam = nullptr;
     EVP_PKEY* serverHmacKeyParam = nullptr;
+    
     EVP_PKEY* clientSymmetricKeyParam = nullptr;
     EVP_PKEY* clientHmacKeyParam = nullptr;
 

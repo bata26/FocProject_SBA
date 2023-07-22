@@ -385,34 +385,31 @@ unsigned char *deriveSharedSecret(EVP_PKEY *firstKey, EVP_PKEY *secondKey)
         ret = EVP_PKEY_derive_init(ctx);
         if (ret != 1)
         {
-            throw 0;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw exception();
         }
         ret = EVP_PKEY_derive_set_peer(ctx, secondKey);
         if (ret != 1)
         {
-            throw 0;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw exception();
         }
+        // get key len
         ret = EVP_PKEY_derive(ctx, nullptr, &secretLength);
         if (ret != 1)
         {
-            throw 0;
+            cerr << "[ERROR] Couldn't malloc!" << endl;
+            throw exception();
         }
         sharedSecret = (unsigned char *)malloc(secretLength);
         if (!sharedSecret)
         {
-            throw 1;
-        }
-    }
-    catch (int e)
-    {
-        if (e == 1)
-        {
+            throw exception();
             cerr << "[ERROR] Couldn't allocate shared secret!" << endl;
         }
-        else
-        {
-            cerr << "[ERROR] Couldn't malloc!" << endl;
-        }
+    }
+    catch (...)
+    {
         EVP_PKEY_CTX_free(ctx);
         return nullptr;
     }
@@ -655,7 +652,7 @@ int verifySignature(EVP_PKEY *pubKey, const unsigned char *signature, const size
     }
     catch (int errorCode)
     {
-       if(errorCode == 1) EVP_MD_CTX_free(ctx);
+        if(errorCode == 1) EVP_MD_CTX_free(ctx);
         return -1;
     }
 
@@ -668,15 +665,8 @@ int verifySignature(EVP_PKEY *pubKey, const unsigned char *signature, const size
 // Verify if 2 digest SHA-256 are the same
 bool verifySHA256(unsigned char *digest, unsigned char *receivedDigest)
 {
-
-    if (CRYPTO_memcmp(digest, receivedDigest, EVP_MD_size(EVP_sha256())) == 0)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    if (CRYPTO_memcmp(digest, receivedDigest, EVP_MD_size(EVP_sha256())) == 0) return true;
+    return false;
 }
 
 // Generate SHA-256 HMAC with a 256 bit key

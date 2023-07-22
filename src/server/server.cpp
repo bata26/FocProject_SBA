@@ -408,10 +408,13 @@ void receiveClientAuthenticationPkt(loginAuthenticationPkt &pkt, loginAuthentica
     }
     pkt.clientSymmetricKeyParam = helloPkt.clientSymmKeyParam;
     pkt.clientSymmetricKeyParamLen = helloPkt.symmetricKeyLen;
+
     pkt.clientHmacKeyParam = helloPkt.clientHmacKeyParam;
     pkt.clientHmacKeyParamLen = helloPkt.hmacKeyLen;
+    
     pkt.serverSymmetricKeyParam = serverAuthPkt.serverSymmetricKeyParamClear;
     pkt.serverSymmetricKeyParamLen = pkt.serverSymmetricKeyParamClearLen;
+    
     pkt.serverHmacKeyParam = serverAuthPkt.serverHmacKeyParamClear;
     pkt.serverHmacKeyParamLen = serverAuthPkt.serverHmacKeyParamClearLen;
 

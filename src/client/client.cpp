@@ -75,7 +75,7 @@ int receiveMessage(unsigned char *&buffer, uint32_t &len)
         ret = recv(sessionSocket, buffer, len, 0);
         if (ret == 0)
         {
-            cerr << "[ERROR] Client disconnected" << endl
+            cerr << "[ERROR] Server disconnected" << endl
                  << endl;
             throw 2;
         }
@@ -135,6 +135,7 @@ void sendFirstPkt(helloPkt &pkt)
     pkt.code = HELLO;
     pkt.username = username;
 
+    // generate DH Params
     pkt.clientSymmKeyParam = generateDhKey();
     pkt.clientHmacKeyParam = generateDhKey();
     
@@ -144,15 +145,17 @@ void sendFirstPkt(helloPkt &pkt)
         throw exception();
     }
 
+    // serialize message
     toCopy = (unsigned char *)pkt.serializeMessage(len);
 
     if (toCopy == nullptr)
     {
         free(toCopy);
-        cerr << "[ERROR] Couldn't serialize wave packet!" << endl;
+        cerr << "[ERROR] Couldn't serialize hello packet!" << endl;
         throw exception();
     }
 
+    // malloc buffer for serialized packet
     buffer = (unsigned char *)malloc(len);
 
     if (!buffer)
@@ -162,14 +165,15 @@ void sendFirstPkt(helloPkt &pkt)
         cerr << "[ERROR] Couldn't malloc!" << endl;
         throw exception();
     }
-
+    
+    // copy serialized packet in buffer
     memcpy(buffer, toCopy, len);
 
     if (!sendMessage(buffer, len))
     {
         free(buffer);
         free(toCopy);
-        cerr << "[ERROR] Couldn't send wave packet!" << endl;
+        cerr << "[ERROR] Couldn't send hello packet!" << endl;
         throw exception();
     }
 
@@ -178,7 +182,7 @@ void sendFirstPkt(helloPkt &pkt)
 }
 
 // Receive the server authentication packet
-void receiveLoginAuthenticationFromServer(helloPkt &hello_pkt, loginAuthenticationPkt &pkt)
+void receiveLoginAuthenticationFromServer(helloPkt &helloPkt, loginAuthenticationPkt &pkt)
 {
     int ret;
     unsigned char *receiveBuffer;
@@ -208,7 +212,7 @@ void receiveLoginAuthenticationFromServer(helloPkt &hello_pkt, loginAuthenticati
     }
 
     // Derive symmetric key and hmac key, hash them and take a portion of the hash for the 128 bit key
-    symmetricKeyNoHashed = deriveSharedSecret(hello_pkt.clientSymmKeyParam, pkt.serverSymmetricKeyParamClear);
+    symmetricKeyNoHashed = deriveSharedSecret(helloPkt.clientSymmKeyParam, pkt.serverSymmetricKeyParamClear);
 
     if (!symmetricKeyNoHashed)
     {
@@ -225,7 +229,7 @@ void receiveLoginAuthenticationFromServer(helloPkt &hello_pkt, loginAuthenticati
         throw exception();
     }
 
-    hmacKeyNoHashed = deriveSharedSecret(hello_pkt.clientHmacKeyParam, pkt.serverHmacKeyParamClear);
+    hmacKeyNoHashed = deriveSharedSecret(helloPkt.clientHmacKeyParam, pkt.serverHmacKeyParamClear);
     if (!hmacKeyNoHashed)
     {
         cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
@@ -294,14 +298,17 @@ void receiveLoginAuthenticationFromServer(helloPkt &hello_pkt, loginAuthenticati
     // Save received fields
     pkt.serverSymmetricKeyParam = pkt.serverSymmetricKeyParamClear;
     pkt.serverSymmetricKeyParamLen = pkt.serverSymmetricKeyParamClearLen;
+
     pkt.serverHmacKeyParam = pkt.serverHmacKeyParamClear;
     pkt.serverHmacKeyParamLen = pkt.serverHmacKeyParamClearLen;
-    pkt.clientSymmetricKeyParam = hello_pkt.clientSymmKeyParam;
-    pkt.clientSymmetricKeyParamLen = hello_pkt.symmetricKeyLen;
-    pkt.clientHmacKeyParam = hello_pkt.clientHmacKeyParam;
-    pkt.clientHmacKeyParamLen = hello_pkt.hmacKeyLen;
 
-    // We serialize before encrypting and sending
+    pkt.clientSymmetricKeyParam = helloPkt.clientSymmKeyParam;
+    pkt.clientSymmetricKeyParamLen = helloPkt.symmetricKeyLen;
+
+    pkt.clientHmacKeyParam = helloPkt.clientHmacKeyParam;
+    pkt.clientHmacKeyParamLen = helloPkt.hmacKeyLen;
+
+    // We serialize before check the signature
     unsigned char *toCopy = (unsigned char *)pkt.serializePartToEncrypt(signedTextLen);
 
     signedText = (unsigned char *)malloc(signedTextLen);
@@ -461,7 +468,7 @@ bool startSession()
 
     cout << "WAITING FOR SERVER AUTHENTICATION" << endl;
 
-    // Receive login_server_authentication_pkt
+    // Receive server authentication packet
     try
     {
         receiveLoginAuthenticationFromServer(helloPkt, serverAuthPkt);
@@ -475,10 +482,13 @@ bool startSession()
 
     clientAuthPkt.serverSymmetricKeyParam = serverAuthPkt.serverSymmetricKeyParamClear;
     clientAuthPkt.serverSymmetricKeyParamLen = serverAuthPkt.serverSymmetricKeyParamClearLen;
+
     clientAuthPkt.serverHmacKeyParam = serverAuthPkt.serverHmacKeyParamClear;
     clientAuthPkt.serverHmacKeyParamLen = serverAuthPkt.serverHmacKeyParamClearLen;
+    
     clientAuthPkt.clientSymmetricKeyParam = helloPkt.clientSymmKeyParam;
     clientAuthPkt.clientSymmetricKeyParamLen = helloPkt.symmetricKeyLen;
+    
     clientAuthPkt.clientHmacKeyParam = helloPkt.clientHmacKeyParam;
     clientAuthPkt.clientHmacKeyParamLen = helloPkt.hmacKeyLen;
 
@@ -813,10 +823,9 @@ int main(int argc, char **argv)
     cout << endl;
 
     // private key controls
-    string dir = "./src/client/keys/" + username + "_privK.pem";
+    string privKeyFilePath = "./src/client/keys/" + username + "_privK.pem";
 
-    cout << dir << endl;
-    FILE *file = fopen(dir.c_str(), "r");
+    FILE *file = fopen(privKeyFilePath.c_str(), "r");
 
     if (!file)
     {
