@@ -200,7 +200,7 @@ void receiveHelloPkt(helloPkt &pkt)
         {
             EVP_PKEY_free(pkt.clientHmacKeyParam);
         }
-        cerr << "[ERROR] username " + helloPkt.username + " is not registered" << endl;
+        cerr << "[ERROR] username " + pkt.username + " is not registered" << endl;
         throw exception();
     }
 
