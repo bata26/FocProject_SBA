@@ -824,6 +824,7 @@ int handleCommand()
     catch (...)
     {
         cerr << "Impossible manage commands, waiting for client retry" << endl;
+        return 2;
     }
     return 0;
 }
