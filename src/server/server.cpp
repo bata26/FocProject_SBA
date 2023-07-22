@@ -523,7 +523,6 @@ bool startSession()
         return false;
     }
     ret = hashHmacKey(hmacKey, clearHmacKey);
-    //cout << "Hmac key: " << hmac_key << "Size of key: "<< hmac_key_length << endl;
 
     if (ret != 0)
     {
@@ -535,7 +534,7 @@ bool startSession()
     free(clearSymmetricKey);
     free(clearHmacKey);
 
-    // Encrypt and send login_server_authentication_pkt
+    // Encrypt and send login auth packet
     try
     {
         sendLoginAuthenticationPkt(serverAuthPkt);

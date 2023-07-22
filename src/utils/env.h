@@ -23,5 +23,5 @@
 #define SERVER_KEY_PWD "server"
 
 // base path
-#define BASE_CLIENT_PATH "./src/client/"
-#define BASE_SERVER_PATH "./src/server/"
+//#define BASE_CLIENT_PATH "./src/client/"
+//#define BASE_SERVER_PATH "./src/server/"

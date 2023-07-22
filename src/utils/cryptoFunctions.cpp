@@ -429,9 +429,9 @@ unsigned char *deriveSharedSecret(EVP_PKEY *firstKey, EVP_PKEY *secondKey)
 void *serializeKey(EVP_PKEY *key, uint32_t &keyLen)
 {
     int ret;
-    long ret_long;
+    long longRet;
     BIO *bio = nullptr;
-    void *key_buffer = nullptr;
+    void *keyBuffer = nullptr;
 
     try
     {
@@ -452,19 +452,19 @@ void *serializeKey(EVP_PKEY *key, uint32_t &keyLen)
             throw 0;
         }
 
-        // Set of the pointer key_buffer to the buffer of the memory bio and return its size
-        ret_long = BIO_get_mem_data(bio, &key_buffer);
-        if (ret_long <= 0)
+        // Set of the pointer keyBuffer to the buffer of the memory bio and return its size
+        longRet = BIO_get_mem_data(bio, &keyBuffer);
+        if (longRet <= 0)
         {
             BIO_free(bio);
-            cerr << "[ERROR] Couldn't BIO_get_mem_data with error: " << ret_long << endl;
+            cerr << "[ERROR] Couldn't BIO_get_mem_data with error: " << longRet << endl;
             throw 0;
         }
-        keyLen = (uint32_t)ret_long;
+        keyLen = (uint32_t)longRet;
 
         // Allocate memory for the serialized key
-        key_buffer = malloc(keyLen);
-        if (!key_buffer)
+        keyBuffer = malloc(keyLen);
+        if (!keyBuffer)
         {
             BIO_free(bio);
             cerr << "[ERROR] Couldn't malloc!" << endl;
@@ -472,11 +472,11 @@ void *serializeKey(EVP_PKEY *key, uint32_t &keyLen)
         }
 
         // Read data from bio and extract serialized key
-        ret = BIO_read(bio, key_buffer, keyLen);
+        ret = BIO_read(bio, keyBuffer, keyLen);
         if (ret < 1)
         {
             BIO_free(bio);
-            free(key_buffer);
+            free(keyBuffer);
             cerr << "[ERROR] Couldn't BIO_read with error: " << ret << endl;
             throw 1;
         }
@@ -484,14 +484,14 @@ void *serializeKey(EVP_PKEY *key, uint32_t &keyLen)
     catch (int errorCode)
     {
         BIO_free(bio);
-        if(errorCode == 1) free(key_buffer);
+        if(errorCode == 1) free(keyBuffer);
         return nullptr;
     }
 
     // Free
     BIO_free(bio);
 
-    return key_buffer;
+    return keyBuffer;
 }
 
 // Deserialize key EVP_PKEY

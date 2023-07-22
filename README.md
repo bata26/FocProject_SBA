@@ -10,7 +10,7 @@ Punti Fondamentali:
 Per l'autenticazione l'idea è quella di usare il protocollo STS (Station To Station), utilizzando poi Diffie Helmann per lo scambio di chiavi. In questo caso potremmo non avere bisogno della firma digitale.
 
 ### Scambio dei pacchetti:
-Ispirato principalmente al protocollo di Giovanni:
+Station To Station:
 **CLIENT**
 A -> chiave per DFH per ottenre la session key KS
 C -> chiave per DFH per ottenere la chiave per l'hash KH
@@ -22,8 +22,8 @@ SIG -> firma digitale del server a partire dalle 4 chiavi A,B,C,D
 IV -> Initialization Vector
 
 - M1: <opcode , username, username length, length(A), length(C), A , C >
-- M2: <length(A) , length(B) ,  length(C) , length(D) , length(SIG) , IV,A , B , C , D, {SIG}KS >
-- M3: <length(A) , length(B) ,  length(C) , length(D) , length(SIG) , IV,A , B , C , D, {SIG}KS >
+- M2: <IV, B , D, {SIG}KS >
+- M3: <IV, s{SIG}KS >
 # Protocollo di comunicazione
 Come gestiamo i pacchetti di comunicazione?
 Requisiti:

@@ -939,7 +939,7 @@ int main(int argc, char **argv)
             }
             default:
             {
-                cout << "[ERROR]BANK: Operation doesn't exist!" << endl;
+                cout << "[ERROR]Operation doesn't exist!" << endl;
                 break;
             }
             }
