@@ -26,24 +26,24 @@ const string serverIp = SERVER_IP;
 sockaddr_in serverAddress;
 uint32_t counter = 0;
 
-string server_pubK_path = "./server_pubK.pem";
+string serverPubKPath = "./server_pubK.pem";
 
 // iv
 unsigned char *iv = nullptr;
 int ivSize = EVP_CIPHER_iv_length(EVP_aes_128_cbc());
 
 // Keys
-EVP_PKEY *private_key = nullptr;
+EVP_PKEY *privateKey = nullptr;
 EVP_PKEY *serverPubk = nullptr;
-unsigned char *symmetric_key = nullptr;
-unsigned char *hmac_key = nullptr;
-int symmetric_key_length = EVP_CIPHER_key_length(EVP_aes_256_gcm());
+unsigned char *symmetricKey = nullptr;
+unsigned char *hmacKey = nullptr;
+int symmetricKeyLength = EVP_CIPHER_key_length(EVP_aes_256_gcm());
 int hmacKeyLength = HMAC_KEY_SIZE;
 
 uint64_t lastTimestampSended;
 
 // Receive message from socket
-int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
+int receiveMessage(unsigned char *&buffer, uint32_t &len)
 {
     ssize_t ret;
     // Receive message length
@@ -64,15 +64,15 @@ int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
     {
         // Allocate receive buffer
         len = ntohl(len);
-        recv_buffer = (unsigned char *)malloc(len);
-        if (!recv_buffer)
+        buffer = (unsigned char *)malloc(len);
+        if (!buffer)
         {
             cerr << "[ERROR] recv_buffer malloc fail" << endl
                  << endl;
             throw 1;
         }
         // receive message
-        ret = recv(sessionSocket, recv_buffer, len, 0);
+        ret = recv(sessionSocket, buffer, len, 0);
         if (ret == 0)
         {
             cerr << "[ERROR] Client disconnected" << endl
@@ -88,7 +88,7 @@ int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
     }
     catch (int errorCode)
     {
-        free(recv_buffer);
+        free(buffer);
         if (errorCode == 2)
         {
             return -2;
@@ -102,12 +102,12 @@ int receiveMessage(unsigned char *&recv_buffer, uint32_t &len)
 }
 
 // Send message through socket
-bool send_message(void *msg, const uint32_t hostLen)
+bool sendMessage(void *msg, const uint32_t hostLen)
 {
     ssize_t ret;
-    uint32_t actual_len = htonl(hostLen);
+    uint32_t len = htonl(hostLen);
     // send message length
-    ret = send(sessionSocket, &actual_len, sizeof(actual_len), 0);
+    ret = send(sessionSocket, &len, sizeof(len), 0);
     // -1 error, if returns 0 no bytes are sent
     if (ret <= 0)
     {
@@ -165,7 +165,7 @@ void sendFirstPkt(helloPkt &pkt)
 
     memcpy(buffer, toCopy, len);
 
-    if (!send_message(buffer, len))
+    if (!sendMessage(buffer, len))
     {
         free(buffer);
         free(toCopy);
@@ -178,71 +178,71 @@ void sendFirstPkt(helloPkt &pkt)
 }
 
 // Receive the server authentication packet
-void receive_login_server_authentication(helloPkt &hello_pkt, login_authentication_pkt &pkt)
+void receiveLoginAuthenticationFromServer(helloPkt &hello_pkt, loginAuthenticationPkt &pkt)
 {
     int ret;
-    unsigned char *receive_buffer;
+    unsigned char *receiveBuffer;
     uint32_t len;
-    unsigned char *symmetric_key_no_hashed;
-    unsigned char *hmac_key_no_hashed;
-    unsigned char *plaintext;
+    unsigned char *symmetricKeyNoHashed;
+    unsigned char *hmacKeyNoHashed;
+    unsigned char *plainText;
     uint32_t plainlen;
-    unsigned char *signed_text;
-    int signed_text_len;
+    unsigned char *signedText;
+    int signedTextLen;
 
     // Receive message
-    if (receiveMessage(receive_buffer, len) < 0)
+    if (receiveMessage(receiveBuffer, len) < 0)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         cerr << "[ERROR] Error in the received login_authentication_pkt" << endl;
         throw exception();
     }
 
 
     // Deserialize the message to read clearly the message
-    if (!pkt.deserialize_message(receive_buffer))
+    if (!pkt.deserializeMessage(receiveBuffer))
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         cerr << "[ERROR] some error in deserialize pkt" << endl;
         throw exception();
     }
 
     // Derive symmetric key and hmac key, hash them and take a portion of the hash for the 128 bit key
-    symmetric_key_no_hashed = deriveSharedSecret(hello_pkt.clientSymmKeyParam, pkt.serverSymmetricKeyParamClear);
+    symmetricKeyNoHashed = deriveSharedSecret(hello_pkt.clientSymmKeyParam, pkt.serverSymmetricKeyParamClear);
 
-    if (!symmetric_key_no_hashed)
+    if (!symmetricKeyNoHashed)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
         throw exception();
     }
 
-    ret = hashKey(symmetric_key, symmetric_key_no_hashed);
+    ret = hashKey(symmetricKey, symmetricKeyNoHashed);
     if (ret != 0)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
         throw exception();
     }
 
-    hmac_key_no_hashed = deriveSharedSecret(hello_pkt.clientHmacKeyParam, pkt.serverHmacKeyParamClear);
-    if (!hmac_key_no_hashed)
+    hmacKeyNoHashed = deriveSharedSecret(hello_pkt.clientHmacKeyParam, pkt.serverHmacKeyParamClear);
+    if (!hmacKeyNoHashed)
     {
         cerr << "[ERROR] Couldn't derive symmetric key or hmac key!" << endl;
         throw exception();
     }
 
-    ret = hashHmacKey(hmac_key, hmac_key_no_hashed);
+    ret = hashHmacKey(hmacKey, hmacKeyNoHashed);
     if (ret != 0)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         cerr << "[ERROR] Couldn't hash symmetric key or hmac key!" << endl;
         throw exception();
     }
 
     // Clear the non hashed keys
-    free(symmetric_key_no_hashed);
-    free(hmac_key_no_hashed);
+    free(symmetricKeyNoHashed);
+    free(hmacKeyNoHashed);
 
     // Decrypt using the key and the iv received
     if (iv != nullptr)
@@ -253,7 +253,7 @@ void receive_login_server_authentication(helloPkt &hello_pkt, login_authenticati
     iv = (unsigned char *)malloc(ivSize);
     if (!iv)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         free(iv);
         iv = nullptr;
         cerr << "[ERROR] Couldn't malloc!" << endl;
@@ -263,87 +263,87 @@ void receive_login_server_authentication(helloPkt &hello_pkt, login_authenticati
     memcpy(iv, pkt.iv, ivSize);
     free(pkt.iv);
 
-    ret = cbcDecrypt(pkt.encryptedSign, pkt.encryptedSignLen, plaintext, plainlen, symmetric_key, iv);
+    ret = cbcDecrypt(pkt.encryptedSign, pkt.encryptedSignLen, plainText, plainlen, symmetricKey, iv);
 
     if (ret != 0)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         free(iv);
         iv = nullptr;
-        free(plaintext);
+        free(plainText);
         cerr << "[ERROR] Couldn't decrypt server authentication packet!" << endl;
         throw exception();
     }
 
     // Extract server public key
-    FILE *server_pubkey_file = fopen("./src/client/keys/server_pubK.pem", "r");
-    serverPubk = PEM_read_PUBKEY(server_pubkey_file, NULL, NULL, NULL);
-    fclose(server_pubkey_file);
+    FILE *serverPubKeyFile = fopen("./src/client/keys/server_pubK.pem", "r");
+    serverPubk = PEM_read_PUBKEY(serverPubKeyFile, NULL, NULL, NULL);
+    fclose(serverPubKeyFile);
 
     if (serverPubk == nullptr)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         free(iv);
         iv = nullptr;
-        free(plaintext);
+        free(plainText);
         EVP_PKEY_free(serverPubk);
         cerr << "[ERROR] Couldn't extract server's public key!" << endl;
         throw exception();
     }
 
     // Save received fields
-    pkt.symmetric_key_param_server = pkt.serverSymmetricKeyParamClear;
-    pkt.symmetric_key_param_len_server = pkt.serverSymmetricKeyParamClearLen;
-    pkt.hmac_key_param_server = pkt.serverHmacKeyParamClear;
-    pkt.hmac_key_param_len_server = pkt.serverHmacKeyParamClearLen;
-    pkt.symmetric_key_param_client = hello_pkt.clientSymmKeyParam;
-    pkt.symmetric_key_param_len_client = hello_pkt.symmetricKeyLen;
-    pkt.hmac_key_param_client = hello_pkt.clientHmacKeyParam;
-    pkt.hmac_key_param_len_client = hello_pkt.hmacKeyLen;
+    pkt.serverSymmetricKeyParam = pkt.serverSymmetricKeyParamClear;
+    pkt.serverSymmetricKeyParamLen = pkt.serverSymmetricKeyParamClearLen;
+    pkt.serverHmacKeyParam = pkt.serverHmacKeyParamClear;
+    pkt.serverHmacKeyParamLen = pkt.serverHmacKeyParamClearLen;
+    pkt.clientSymmetricKeyParam = hello_pkt.clientSymmKeyParam;
+    pkt.clientSymmetricKeyParamLen = hello_pkt.symmetricKeyLen;
+    pkt.clientHmacKeyParam = hello_pkt.clientHmacKeyParam;
+    pkt.clientHmacKeyParamLen = hello_pkt.hmacKeyLen;
 
     // We serialize before encrypting and sending
-    unsigned char *to_copy = (unsigned char *)pkt.serialize_part_to_encrypt(signed_text_len);
+    unsigned char *toCopy = (unsigned char *)pkt.serializePartToEncrypt(signedTextLen);
 
-    signed_text = (unsigned char *)malloc(signed_text_len);
-    if (!signed_text)
+    signedText = (unsigned char *)malloc(signedTextLen);
+    if (!signedText)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         free(iv);
         iv = nullptr;
-        free(plaintext);
+        free(plainText);
         EVP_PKEY_free(serverPubk);
-        free(signed_text);
+        free(signedText);
         cerr << "[ERROR] Couldn't malloc!" << endl;
         throw exception();
     }
-    memcpy(signed_text, to_copy, signed_text_len);
+    memcpy(signedText, toCopy, signedTextLen);
 
     // Verify the signature
-    ret = verifySignature(serverPubk, plaintext, plainlen, signed_text, signed_text_len);
+    ret = verifySignature(serverPubk, plainText, plainlen, signedText, signedTextLen);
     if (ret != 0)
     {
-        free(receive_buffer);
+        free(receiveBuffer);
         free(iv);
         iv = nullptr;
-        free(plaintext);
+        free(plainText);
         EVP_PKEY_free(serverPubk);
-        free(signed_text);
+        free(signedText);
         cerr << "[ERROR] Couldn't verify the signature!" << endl;
         throw exception();
     }
 
     // Frees
-    free(signed_text);
-    free(to_copy);
-    free(receive_buffer);
-    free(plaintext);
+    free(signedText);
+    free(toCopy);
+    free(receiveBuffer);
+    free(plainText);
 }
 
 // Send the client authentication packet encrypted
-void send_login_client_authentication(login_authentication_pkt &pkt)
+void sendClientAuthenticationPacket(loginAuthenticationPkt &pkt)
 {
     unsigned char *toEncrypt;
-    int pte_len;
+    int len;
     int finalLen;
     unsigned int signatureLen;
     unsigned char *signature;
@@ -354,12 +354,12 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     int ret;
 
     // Serialize the part to encrypt
-    toCopy = (unsigned char *)pkt.serialize_part_to_encrypt(pte_len);
+    toCopy = (unsigned char *)pkt.serializePartToEncrypt(len);
     if (toCopy == nullptr){
         cerr << "[ERROR] Couldn't serialize part to encrypt!" << endl;
         throw exception();
     }
-    toEncrypt = (unsigned char *)malloc(pte_len);
+    toEncrypt = (unsigned char *)malloc(len);
     if (toEncrypt == nullptr)
     {
         free(toCopy);
@@ -367,10 +367,10 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
         throw exception();
     }
 
-    memcpy(toEncrypt, toCopy, pte_len);
+    memcpy(toEncrypt, toCopy, len);
 
     // Sign the document
-    signature = signMessage(private_key, toEncrypt, pte_len, signatureLen);
+    signature = signMessage(privateKey, toEncrypt, len, signatureLen);
     if (signature == nullptr)
     {
         free(toCopy);
@@ -382,7 +382,7 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     iv = generateIV(); // THROWSexception()0
 
     // Encrypt
-    ret = cbcEncrypt(signature, signatureLen, ciphertext, cipherlen, symmetric_key, iv);
+    ret = cbcEncrypt(signature, signatureLen, ciphertext, cipherlen, symmetricKey, iv);
     if (ret != 0)
     {
         free(toCopy);
@@ -401,7 +401,7 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
     free(toCopy);
     free(toEncrypt);
 
-    toCopy = (unsigned char *)pkt.serialize_message_no_clear_keys(finalLen);
+    toCopy = (unsigned char *)pkt.serializeMessageNoClearKeys(finalLen);
 
     finalPkt = (unsigned char *)malloc(finalLen);
     if (!finalPkt)
@@ -417,7 +417,7 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
 
     memcpy(finalPkt, toCopy, finalLen);
 
-    if (!send_message(finalPkt, finalLen))
+    if (!sendMessage(finalPkt, finalLen))
     {
         free(ciphertext);
         free(iv);
@@ -439,23 +439,23 @@ void send_login_client_authentication(login_authentication_pkt &pkt)
 }
 
 // Function to establish a symmetric key
-bool start_session()
+bool startSession()
 {
-    helloPkt hello_pkt;
-    login_authentication_pkt server_auth_pkt;
-    login_authentication_pkt client_auth_pkt;
+    helloPkt helloPkt;
+    loginAuthenticationPkt serverAuthPkt;
+    loginAuthenticationPkt clientAuthPkt;
 
     cout << "CONNECTING TO SERVER" << endl;
 
     // Send wave
     try
     {
-        sendFirstPkt(hello_pkt);
+        sendFirstPkt(helloPkt);
     }
     catch (...)
     {
-        EVP_PKEY_free(hello_pkt.clientSymmKeyParam);
-        EVP_PKEY_free(hello_pkt.clientHmacKeyParam);
+        EVP_PKEY_free(helloPkt.clientSymmKeyParam);
+        EVP_PKEY_free(helloPkt.clientHmacKeyParam);
         return false;
     }
 
@@ -464,7 +464,7 @@ bool start_session()
     // Receive login_server_authentication_pkt
     try
     {
-        receive_login_server_authentication(hello_pkt, server_auth_pkt);
+        receiveLoginAuthenticationFromServer(helloPkt, serverAuthPkt);
     }
     catch (...)
     {
@@ -473,19 +473,19 @@ bool start_session()
 
     cout << "SERVER CORRECTLY AUTHENTICATED" << endl;
 
-    client_auth_pkt.symmetric_key_param_server = server_auth_pkt.serverSymmetricKeyParamClear;
-    client_auth_pkt.symmetric_key_param_len_server = server_auth_pkt.serverSymmetricKeyParamClearLen;
-    client_auth_pkt.hmac_key_param_server = server_auth_pkt.serverHmacKeyParamClear;
-    client_auth_pkt.hmac_key_param_len_server = server_auth_pkt.serverHmacKeyParamClearLen;
-    client_auth_pkt.symmetric_key_param_client = hello_pkt.clientSymmKeyParam;
-    client_auth_pkt.symmetric_key_param_len_client = hello_pkt.symmetricKeyLen;
-    client_auth_pkt.hmac_key_param_client = hello_pkt.clientHmacKeyParam;
-    client_auth_pkt.hmac_key_param_len_client = hello_pkt.hmacKeyLen;
+    clientAuthPkt.serverSymmetricKeyParam = serverAuthPkt.serverSymmetricKeyParamClear;
+    clientAuthPkt.serverSymmetricKeyParamLen = serverAuthPkt.serverSymmetricKeyParamClearLen;
+    clientAuthPkt.serverHmacKeyParam = serverAuthPkt.serverHmacKeyParamClear;
+    clientAuthPkt.serverHmacKeyParamLen = serverAuthPkt.serverHmacKeyParamClearLen;
+    clientAuthPkt.clientSymmetricKeyParam = helloPkt.clientSymmKeyParam;
+    clientAuthPkt.clientSymmetricKeyParamLen = helloPkt.symmetricKeyLen;
+    clientAuthPkt.clientHmacKeyParam = helloPkt.clientHmacKeyParam;
+    clientAuthPkt.clientHmacKeyParamLen = helloPkt.hmacKeyLen;
 
     // Send login_client_authentication_pkt
     try
     {
-        send_login_client_authentication(client_auth_pkt);
+        sendClientAuthenticationPacket(clientAuthPkt);
     }
     catch (...)
     {
@@ -493,64 +493,64 @@ bool start_session()
     }
 
     // Frees
-    EVP_PKEY_free(hello_pkt.clientSymmKeyParam);
-    EVP_PKEY_free(hello_pkt.clientHmacKeyParam);
-    EVP_PKEY_free(server_auth_pkt.serverSymmetricKeyParamClear);
-    EVP_PKEY_free(server_auth_pkt.serverHmacKeyParamClear);
+    EVP_PKEY_free(helloPkt.clientSymmKeyParam);
+    EVP_PKEY_free(helloPkt.clientHmacKeyParam);
+    EVP_PKEY_free(serverAuthPkt.serverSymmetricKeyParamClear);
+    EVP_PKEY_free(serverAuthPkt.serverHmacKeyParamClear);
 
     return true;
 }
 
-bool encrypt_generate_HMAC_and_send(string buffer)
+bool encryptGenerateHMACAndSend(string buffer)
 {
     // Generic Packet
-    communication_pkt pkt;
+    communicationPkt pkt;
     unsigned char* ciphertext;
     int cipherlen;
     unsigned char* data;
-    int pkt_size;
-    uint32_t MAC_len;
+    int pktSize;
+    uint32_t MACLen;
     unsigned char* HMAC;
-    unsigned char* generated_MAC;
+    unsigned char* generatedMAC;
 
     // Encryption
-    if (cbcEncrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetric_key, iv) != 0)
+    if (cbcEncrypt((unsigned char *)buffer.c_str(), buffer.length(), ciphertext, cipherlen, symmetricKey, iv) != 0)
     {
         cerr << "[ERROR] Couldn't encrypt!" << endl;
         return false;
     }
 
     // Get the HMAC
-    generated_MAC = (uint8_t *)malloc(IV_LENGTH + cipherlen + sizeof(cipherlen));
-    if (!generated_MAC)
+    generatedMAC = (uint8_t *)malloc(IV_LENGTH + cipherlen + sizeof(cipherlen));
+    if (!generatedMAC)
     {
         cerr << "[ERROR] Couldn't malloc!" << endl;
         return false;
     }
 
     // Clean allocated space and copy
-    memset(generated_MAC, 0, IV_LENGTH + cipherlen + sizeof(cipherlen));
-    memcpy(generated_MAC, iv, IV_LENGTH);
-    memcpy(generated_MAC + IV_LENGTH, &cipherlen, sizeof(cipherlen));
-    memcpy(generated_MAC + IV_LENGTH + sizeof(cipherlen), (void *)ciphertext, cipherlen);
+    memset(generatedMAC, 0, IV_LENGTH + cipherlen + sizeof(cipherlen));
+    memcpy(generatedMAC, iv, IV_LENGTH);
+    memcpy(generatedMAC + IV_LENGTH, &cipherlen, sizeof(cipherlen));
+    memcpy(generatedMAC + IV_LENGTH + sizeof(cipherlen), (void *)ciphertext, cipherlen);
 
     // Generate the HMAC on the receiving side iv||ciphertext
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MAC_len, hmac_key);
+    generate_SHA256_HMAC(generatedMAC, IV_LENGTH + cipherlen + sizeof(cipherlen), HMAC, MACLen, hmacKey);
 
     // Initialization of the data to serialize
-    pkt.ciphertext = (uint8_t *)ciphertext;
-    pkt.cipher_len = cipherlen;
+    pkt.cipherText = (uint8_t *)ciphertext;
+    pkt.cipherLen = cipherlen;
     pkt.iv = iv;
     pkt.HMAC = HMAC;
 
-    data = (unsigned char *)pkt.serialize_message(pkt_size);
+    data = (unsigned char *)pkt.serializeMessage(pktSize);
  
     //If we couldn't serialize the message!
     if (data == nullptr)
     {
         cerr << "[ERROR] Couldn't serialize!" << endl;
-        free(generated_MAC);
-        generated_MAC = nullptr;
+        free(generatedMAC);
+        generatedMAC = nullptr;
         free(ciphertext);
         ciphertext = nullptr;
         free(pkt.HMAC);
@@ -559,11 +559,11 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     }
 
     // Send the message
-    if (!send_message((void *)data, pkt_size))
+    if (!sendMessage((void *)data, pktSize))
     {
         cerr << "[ERROR] Couldn't send message!" << endl;
-        free(generated_MAC);
-        generated_MAC = nullptr;
+        free(generatedMAC);
+        generatedMAC = nullptr;
         free(ciphertext);
         ciphertext = nullptr;
         free(pkt.HMAC);
@@ -574,8 +574,8 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     }
 
     // Frees
-    free(generated_MAC);
-    generated_MAC = nullptr;
+    free(generatedMAC);
+    generatedMAC = nullptr;
     free(ciphertext);
     ciphertext = nullptr;
     free(pkt.HMAC);
@@ -585,19 +585,19 @@ bool encrypt_generate_HMAC_and_send(string buffer)
     return true;
 }
 
-unsigned char* receive_decrypt_and_verify_HMAC()
+unsigned char* receiveDecryptVerifyHMAC()
 {
     unsigned char* data;
-    communication_pkt rcvd_pkt;
-    uint32_t length_rec;
-    unsigned char* plaintxt;
-    uint32_t ptlen;
-    uint32_t MAC_len;
-    uint8_t* generated_MAC;
+    communicationPkt rcvdPkt;
+    uint32_t receivedLen;
+    unsigned char* plainTxt;
+    uint32_t plainTxtLen;
+    uint32_t MACLen;
+    uint8_t* generatedMAC;
     uint8_t* HMAC;
 
     // Receive the serialized data
-    int ret = receiveMessage(data, length_rec);
+    int ret = receiveMessage(data, receivedLen);
     if (ret != 0)
     {
         cerr << "[ERROR] some error in receiving MSG, received error: " << ret << endl;
@@ -607,7 +607,7 @@ unsigned char* receive_decrypt_and_verify_HMAC()
     }
 
     // Deserialize message
-    if (!rcvd_pkt.deserialize_message(data))
+    if (!rcvdPkt.deserializeMessage(data))
     {
         cerr << "Error during deserialization of the data" << endl;
         free(data);
@@ -617,59 +617,59 @@ unsigned char* receive_decrypt_and_verify_HMAC()
 
     free(iv);
     iv = nullptr;
-    iv = rcvd_pkt.iv;
+    iv = rcvdPkt.iv;
 
-    generated_MAC = (uint8_t *)malloc(IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len));
-    if (!generated_MAC)
+    generatedMAC = (uint8_t *)malloc(IV_LENGTH + rcvdPkt.cipherLen + sizeof(rcvdPkt.cipherLen));
+    if (!generatedMAC)
     {
         cerr << "Error during malloc of generated_MAC" << endl;
         return nullptr;
     }
 
     // Clean allocated space and copy
-    memset(generated_MAC, 0, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len));
-    memcpy(generated_MAC, rcvd_pkt.iv, IV_LENGTH);
-    memcpy(generated_MAC + IV_LENGTH, &rcvd_pkt.cipher_len, sizeof(rcvd_pkt.cipher_len));
-    memcpy(generated_MAC + IV_LENGTH + sizeof(rcvd_pkt.cipher_len), (void *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len);
+    memset(generatedMAC, 0, IV_LENGTH + rcvdPkt.cipherLen + sizeof(rcvdPkt.cipherLen));
+    memcpy(generatedMAC, rcvdPkt.iv, IV_LENGTH);
+    memcpy(generatedMAC + IV_LENGTH, &rcvdPkt.cipherLen, sizeof(rcvdPkt.cipherLen));
+    memcpy(generatedMAC + IV_LENGTH + sizeof(rcvdPkt.cipherLen), (void *)rcvdPkt.cipherText, rcvdPkt.cipherLen);
 
     // Generate the HMAC to verify the correctness of the received message
-    generate_SHA256_HMAC(generated_MAC, IV_LENGTH + rcvd_pkt.cipher_len + sizeof(rcvd_pkt.cipher_len), HMAC, MAC_len, hmac_key);
+    generate_SHA256_HMAC(generatedMAC, IV_LENGTH + rcvdPkt.cipherLen + sizeof(rcvdPkt.cipherLen), HMAC, MACLen, hmacKey);
 
     // Verify HMAC
-    if (!verifySHA256(HMAC, rcvd_pkt.HMAC))
+    if (!verifySHA256(HMAC, rcvdPkt.HMAC))
     {
         cerr << "[ERROR] Couldn't verify HMAC, try again" << endl;
-        free(generated_MAC);
-        generated_MAC = nullptr;
-        free(rcvd_pkt.HMAC);
-        rcvd_pkt.HMAC = nullptr;
+        free(generatedMAC);
+        generatedMAC = nullptr;
+        free(rcvdPkt.HMAC);
+        rcvdPkt.HMAC = nullptr;
         return nullptr;
     }
 
     // Decrypt the ciphertext and obtain the plaintext
-    if (cbcDecrypt((unsigned char *)rcvd_pkt.ciphertext, rcvd_pkt.cipher_len, plaintxt, ptlen, symmetric_key, iv) != 0)
+    if (cbcDecrypt((unsigned char *)rcvdPkt.cipherText, rcvdPkt.cipherLen, plainTxt, plainTxtLen, symmetricKey, iv) != 0)
     {
         cerr << "[ERROR] Couldn't encrypt!" << endl;
-        free(generated_MAC);
-        generated_MAC = nullptr;
-        free(rcvd_pkt.HMAC);
-        rcvd_pkt.HMAC = nullptr;
+        free(generatedMAC);
+        generatedMAC = nullptr;
+        free(rcvdPkt.HMAC);
+        rcvdPkt.HMAC = nullptr;
         return nullptr;
     }
 
     // Frees
-    free(generated_MAC);
-    generated_MAC = nullptr;
+    free(generatedMAC);
+    generatedMAC = nullptr;
     free(HMAC);
     HMAC = nullptr;
-    free(rcvd_pkt.HMAC);
-    rcvd_pkt.HMAC = nullptr;
-    return plaintxt;
+    free(rcvdPkt.HMAC);
+    rcvdPkt.HMAC = nullptr;
+    return plainTxt;
 }
 
-string send_operation_packet(int operation)
+string sendOperationPacket(int operation)
 {
-    client_info pkt;
+    clientInfo pkt;
     pkt.operationCode = operation;
     pkt.destAndAmount = "None-0";
     pkt.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -685,55 +685,63 @@ string send_operation_packet(int operation)
         cin >> receiverName;
         if(!cin)
         {
-            throw 6;
+            cerr << "[ERROR] Invalid input!" << endl;
+            throw 0;
         }
-        if (receiverName.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
-            throw 6;
+        if (receiverName.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos){
+            cerr << "[ERROR] Invalid input!" << endl;
+            throw 0;
+        }
         cout << "Amount to transfer:" << endl;
         cin >> stringAmount;
         if(!cin)
         {
-            throw 6;
+            cerr << "[ERROR] Invalid input!" << endl;
+            throw 0;
         }
         if(stringAmount.find_first_not_of(TRANSFER_WHITELIST_NUMS) != std::string::npos)
             stringAmount = "0";
         amount = stoi(stringAmount);
-        if (amount >= 999 || amount <= 0)
-            throw 6;
+        if (amount >= 999 || amount <= 0){
+            cerr << "[ERROR] Invalid input!" << endl;
+            throw 0;
+        }
         pkt.destAndAmount = receiverName + "-" + to_string(amount);
     }
 
     buffer = pkt.serializePacket();
-    cout << "sto per inviare : " << buffer << endl;
 
     iv = generateIV(); // THROWS 0
 
-    if (!encrypt_generate_HMAC_and_send(buffer))
+    if (!encryptGenerateHMACAndSend(buffer))
     {
         free(iv);
         iv = nullptr;
+        cerr << "[ERROR] Couldn't encrypt and generate HMAC!" << endl;
         throw 1;
     }
 
     counter++;
     // Receive the message, check the HMAC validity and decrypt the ciphertext
-    unsigned char *plaintxt = receive_decrypt_and_verify_HMAC();
+    unsigned char *plaintxt = receiveDecryptVerifyHMAC();
     if (plaintxt == nullptr)
     {
         free(iv);
         iv = nullptr;
-        throw 2;
+        cerr << "[ERROR] Could't verify the HMAC of the received message!" << endl;
+        throw 1;
     }
 
     // Expected packet type
-    server_info rcvd_pkt;
+    serverInfo rcvd_pkt;
 
     // Deserialize & extracts plaintext (NOTE: Plaintext is freed in the function)
     if (!rcvd_pkt.deserializeServerInfo(plaintxt))
     {
         free(iv);
         iv = nullptr;
-        throw 3;
+        cerr << "[ERROR] Could't deserialized the received message!" << endl;
+        throw 1;
     }
 
     // Check on rcvd packets values
@@ -741,7 +749,8 @@ string send_operation_packet(int operation)
     {
         free(iv);
         iv = nullptr;
-        throw 4;
+        cerr << "[ERROR] Timestamp of the the received message is not correct!" << endl;
+        throw 1;
     }
 
     // Check the response of the server
@@ -749,7 +758,8 @@ string send_operation_packet(int operation)
     {
         free(iv);
         iv = nullptr;
-        throw 5;
+        cerr << "[ERROR] Operation was not possible!" << endl;
+        throw 1;
     }
 
     free(iv);
@@ -826,7 +836,7 @@ int main(int argc, char **argv)
     }
 
     // Saves locally the private key
-    private_key = privk;
+    privateKey = privk;
     cout << "Valid credentials!" << endl;
 
     // socket initialization
@@ -849,7 +859,7 @@ int main(int argc, char **argv)
     }
 
     // Establish session and HMAC key
-    if (!start_session())
+    if (!startSession())
     {
         cerr << "[ERROR] Session keys establishment failed" << endl;
         return -1;
@@ -866,7 +876,7 @@ int main(int argc, char **argv)
 
     while (connected)
     {
-        string prov;
+        string clientInput;
         int operation;
 
         cout << "--------------------------------------------------" << endl
@@ -876,15 +886,15 @@ int main(int argc, char **argv)
             << "3: History(): Returns the list of transfers" << endl
             << "4: Logout(): Disconnects from the bank" << endl;
         cout << "ME: ";
-        cin >> prov;
+        cin >> clientInput;
         if(!cin)
         {
             cerr << "[ERROR] Couldn't insert operation!" << endl;
             return -1;
         }
-        if(prov.find_first_not_of(OPERATION_WHITELIST_NUMS) != std::string::npos)
-            prov = "0";
-        operation = stoi(prov);
+        if(clientInput.find_first_not_of(OPERATION_WHITELIST_NUMS) != std::string::npos)
+            clientInput = "0";
+        operation = stoi(clientInput);
         if (operation >= 5 || operation <= 0)
             operation = 0;
 
@@ -894,27 +904,27 @@ int main(int argc, char **argv)
             {
             case BALANCE:
             {
-                string result = send_operation_packet(BALANCE);
-                cout << "[+]BALANCE: " << result << endl;
+                string result = sendOperationPacket(BALANCE);
+                cout << "[+]BANK: " << result << endl;
                 break;
             }
             case TRANSFER:
             {
-                string result = send_operation_packet(TRANSFER);
+                string result = sendOperationPacket(TRANSFER);
                 cout << "[+]BANK: Transaction Completed!" << endl;
                 break;
             }
             case HISTORY:
             {
-                string result = send_operation_packet(HISTORY);
-                cout << "[+]BANK: --TRANSACTIONS--" << endl
+                string result = sendOperationPacket(HISTORY);
+                cout << "[+]BANK: TRANSACTIONS LIST" << endl
                      << result << endl;
                 break;
             }
             case LOGOUT:
             {
                 connected = false;
-                string result = send_operation_packet(LOGOUT);
+                string result = sendOperationPacket(LOGOUT);
                 cout << "[+]BANK: Bye!" << endl;
                 break;
             }
@@ -925,45 +935,11 @@ int main(int argc, char **argv)
             }
             }
         }
-        catch (int error_code)
+        catch (int errorCode)
         {
-            switch (error_code)
-            {
-                case 0:
-                {
-                    cerr << "[ERROR] Couldn't generate iv!" << endl;
-                    break;
-                }
-                case 1:
-                {
-                    cerr << "[ERROR] Couldn't encrypt and generate HMAC!" << endl;
-                    break;
-                }
-                case 2:
-                {
-                    cerr << "[ERROR] Could't verify the HMAC of the received message!" << endl;
-                    break;
-                }
-                case 3:
-                {
-                    cerr << "[ERROR] Could't deserialized the received message!" << endl;
-                    break;
-                }
-                case 4:
-                {
-                    cerr << "[ERROR] Counter of the the received message is not correct!" << endl;
-                    break;
-                }
-                case 5:
-                {
-                    cerr << "[ERROR] Operation was not possible!" << endl;
-                    break;
-                }
-                case 6:
-                {
-                    cerr << "[ERROR] Reformat the request!" << endl;
-                    break;
-                }
+            if(errorCode == 1){
+                free(iv);
+                iv=nullptr;
             }
         }
     }

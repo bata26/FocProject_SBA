@@ -2,7 +2,7 @@
 #include <string.h>
 
 // Checks if the username is present into the DB
-bool check_username(string username)
+bool checkUsername(string username)
 {
     if (username.find_first_not_of(USERNAME_WHITELIST_CHARS) != std::string::npos)
         return false;
@@ -44,9 +44,9 @@ string generateID(){
     for (int i = 0; i < idSize; ++i) {
         oss << std::setw(2) << static_cast<unsigned int>(id[i]);
     }
-    string salt_hex = oss.str();
+    string saltHex = oss.str();
     free(id);
-    return salt_hex;
+    return saltHex;
 }
 
 string getBalanceFromFileRow(unsigned char* fileRow){
@@ -104,12 +104,12 @@ void addTransaction(string transactionID, string user, string userToWrite, int a
 }
 
 // Returns balance
-string return_balance(string currentUser)
+string getBalanceAndUserID(string currentUser)
 {
-    if (!check_username(currentUser))
+    if (!checkUsername(currentUser))
         return "";
-    unsigned char *idAndBalance = decryptFile("./src/server/files/" + currentUser + "Balance.txt.enc");
-    return getBalanceFromFileRow(idAndBalance);
+    string idAndBalance = (char*)decryptFile("./src/server/files/" + currentUser + "Balance.txt.enc");
+    return idAndBalance;
 }
 
 
@@ -122,7 +122,7 @@ string getUserHistory(string logged_user){
     string line;
     int lineCount = 0;
 
-    while (std::getline(iss, line) && lineCount < 5) {
+    while (std::getline(iss, line) && lineCount < TRANSFERS_NUM) {
         if(lineCount != 0) historyResult +="\n";
         historyResult += line;
         lineCount++;

@@ -2,10 +2,10 @@
 #include <string.h>
 
 // Returns the balance to the user
-string balance(client_info rcv_pkt, string logged_user)
+string balance(clientInfo rcvPkt, string loggedUser)
 {
-    server_info response_pkt;
-    string balance = return_balance(logged_user);
+    serverInfo response_pkt;
+    string balance = getBalanceAndUserID(loggedUser);
     if (balance == ""){
         response_pkt.responseCode = 500;
         response_pkt.responseContent = "Balance Error.";
@@ -13,7 +13,7 @@ string balance(client_info rcv_pkt, string logged_user)
         response_pkt.responseCode = 200;
         response_pkt.responseContent = balance;
     }
-    response_pkt.timestamp = rcv_pkt.timestamp;
+    response_pkt.timestamp = rcvPkt.timestamp;
     
     // Serialize packet
     return response_pkt.serializePacket();
@@ -22,13 +22,13 @@ string balance(client_info rcv_pkt, string logged_user)
 
 
 // Transfer an amount of money to another user
-string transfer(client_info rcv_pkt, string logged_user)
+string transfer(clientInfo rcvPkt, string loggedUser)
 {
     // Build response pkt
-    server_info response_pkt;
+    serverInfo response_pkt;
     string dest;
     int amount;
-    string s = rcv_pkt.destAndAmount;
+    string s = rcvPkt.destAndAmount;
     string delimiter = "-";
     unsigned int pos;
 
@@ -38,14 +38,14 @@ string transfer(client_info rcv_pkt, string logged_user)
 
     try{
         // check if the username is valid
-        if(!check_username(dest)){
+        if(!checkUsername(dest)){
             cerr << "[ERROR] Receiver doesn't exist." << endl;
             response_pkt.responseCode = 500;
             response_pkt.responseContent = "Invalid dest";
             throw exception();
         }
 
-        int senderBalance = stoi(return_balance(logged_user));
+        int senderBalance = stoi(getBalanceAndUserID(loggedUser));
         if(senderBalance < amount) {
             cerr << "[ERROR] Amount not available." << endl;
             response_pkt.responseCode = 500;
@@ -63,14 +63,14 @@ string transfer(client_info rcv_pkt, string logged_user)
             throw exception();
         }
 
-        updateUserBalance(logged_user, -amount);
+        updateUserBalance(loggedUser, -amount);
         updateUserBalance(dest, amount);
         
-        addTransaction(transactionID, logged_user, dest, -amount ,currentTimestamp);
-        addTransaction(transactionID, dest, logged_user, amount ,currentTimestamp);
+        addTransaction(transactionID, loggedUser, dest, -amount ,currentTimestamp);
+        addTransaction(transactionID, dest, loggedUser, amount ,currentTimestamp);
 
         response_pkt.responseCode = 200;
-        response_pkt.timestamp = rcv_pkt.timestamp;   
+        response_pkt.timestamp = rcvPkt.timestamp;   
         response_pkt.responseContent = "OK";   
 
         return response_pkt.serializePacket();
@@ -83,22 +83,22 @@ string transfer(client_info rcv_pkt, string logged_user)
 
 
 // Send to requesting user the History of the transactions performed
-string history(client_info rcv_pkt, string logged_user)
+string history(clientInfo rcvPkt, string loggedUser)
 {
-    server_info response_pkt;
-    string userHistory = getUserHistory(logged_user);
+    serverInfo response_pkt;
+    string userHistory = getUserHistory(loggedUser);
     response_pkt.responseContent = userHistory;
     response_pkt.responseCode = 200;
-    response_pkt.timestamp = rcv_pkt.timestamp;
+    response_pkt.timestamp = rcvPkt.timestamp;
     return response_pkt.serializePacket();
 }
 
 // Logout
-string logout(client_info rcv_pkt, string logged_user)
+string logout(clientInfo rcvPkt, string loggedUser)
 {
     // Build response packet
-    server_info response_pkt;
-    response_pkt.timestamp = rcv_pkt.timestamp;
+    serverInfo response_pkt;
+    response_pkt.timestamp = rcvPkt.timestamp;
     response_pkt.responseCode = 200;
     response_pkt.responseContent = "OK";
     // Serialize packet
