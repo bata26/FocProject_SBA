@@ -49,7 +49,7 @@ int symmetricKeyLength = EVP_CIPHER_key_length(EVP_aes_128_cbc());
 int hmacKeyLength = HMAC_KEY_SIZE;
 
 // Load private key into memory
-bool load_private_server_key()
+bool loadPrivateServerKey()
 {
     // Open the file where the key is stored
     FILE *file = fopen(serverPrivKPath.c_str(), "r");
@@ -831,7 +831,7 @@ int handleCommand()
 void ServeClient()
 {
     // Load private server key
-    if (!load_private_server_key())
+    if (!loadPrivateServerKey())
     {
         cerr << "[ERROR] Impossible to load private key!" << endl;
         exit(EXIT_FAILURE);
@@ -928,8 +928,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    cout << "Server setup correctly!" << endl
-         << endl;
+    cout << "Server setup correctly!" << endl << endl;
 
     //-----------------------------------//
 
